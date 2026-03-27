@@ -1,0 +1,37 @@
+# Build
+build/
+
+# Logs
+logs/
+cmake-build-*/
+*.xcodeproj
+*.xcworkspace
+DerivedData/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Compiled
+*.o
+*.obj
+*.a
+*.lib
+*.dylib
+*.so
+*.dll
+*.exe
+
+# JUCE
+JuceLibraryCode/
+*.jucer.bak
+
+# User-specific
+*.user
