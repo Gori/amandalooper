@@ -14,11 +14,15 @@ WaveformDisplay::~WaveformDisplay()
 void WaveformDisplay::setSource (const juce::File& audioFile)
 {
     if (audioFile.existsAsFile())
+    {
+        currentFile = audioFile;
         thumbnail.setSource (new juce::FileInputSource (audioFile));
+    }
 }
 
 void WaveformDisplay::clearSource()
 {
+    currentFile = juce::File();
     thumbnail.clear();
     playbackPosition = 0.0;
     repaint();

@@ -196,6 +196,32 @@ void MainComponent::updateUI()
 
         auto& teTrack = loopTrack->getTrack();
 
+        // Update waveform display if a clip exists in the active slot
+        if (auto* clip = loopTrack->getClipInSlot (loopTrack->getActiveSlotIndex()))
+        {
+            auto file = clip->getOriginalFile();
+            auto& waveform = panel->getWaveformDisplay();
+
+            if (waveform.getCurrentFile() != file)
+                waveform.setSource (file);
+
+            // Update playback position
+            if (auto handle = clip->getLaunchHandle())
+            {
+                if (auto playedRange = handle->getPlayedRange())
+                {
+                    auto& ts = amlpEngine.getEdit().tempoSequence;
+                    auto clipLength = clip->getPosition().getLength().inSeconds();
+
+                    if (clipLength > 0.0)
+                    {
+                        auto posTime = ts.toTime (playedRange->getEnd()).inSeconds();
+                        waveform.setPlaybackPosition (std::fmod (posTime, clipLength) / clipLength);
+                    }
+                }
+            }
+        }
+
         // Output level from TE's LevelMeterPlugin
         if (auto* levelPlugin = teTrack.getLevelMeterPlugin())
         {

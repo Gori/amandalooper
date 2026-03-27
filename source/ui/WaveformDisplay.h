@@ -18,6 +18,9 @@ public:
     /** Set the audio file to display. */
     void setSource (const juce::File& audioFile);
 
+    /** Get the currently loaded file. */
+    juce::File getCurrentFile() const { return currentFile; }
+
     /** Clear the display. */
     void clearSource();
 
@@ -38,6 +41,7 @@ private:
     juce::AudioThumbnailCache thumbnailCache { 5 };
     juce::AudioThumbnail thumbnail { 512, formatManager, thumbnailCache };
 
+    juce::File currentFile;
     double playbackPosition = 0.0;
     juce::Colour trackColour = AmlpLookAndFeel::getPlayingColour();
     bool recording = false;
