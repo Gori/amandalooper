@@ -251,10 +251,14 @@ void MainComponent::updateUI()
             if (waveform.getCurrentFile() != file)
                 waveform.setSource (file);
 
-            // Beat grid
+            // Beat grid — use this clip's actual bar count
             if (bpmIsSet)
-                waveform.setBeatGrid (loopManager->getMasterBPM(), 4,
-                                       loopManager->getDetectedBarCount());
+            {
+                double barLength = (4.0 * 60.0) / loopManager->getMasterBPM();
+                auto clipSeconds = clip->getPosition().getLength().inSeconds();
+                int clipBars = juce::jmax (1, (int) std::round (clipSeconds / barLength));
+                waveform.setBeatGrid (loopManager->getMasterBPM(), 4, clipBars);
+            }
 
             // Playback cursor — each track uses its own bar count but BPM-derived length for sync
             if ((state == LoopTrack::State::playing || state == LoopTrack::State::overdubbing)
