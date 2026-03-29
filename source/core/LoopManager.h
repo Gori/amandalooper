@@ -35,6 +35,7 @@ public:
         and sets the edit's tempo.
     */
     void detectAndSetTempoFromFirstLoop (double loopLengthSeconds);
+    int getDetectedBarCount() const { return detectedBarCount; }
 
     // ---- Global Control ----
     void stopAllTracks();
@@ -52,6 +53,7 @@ private:
     te::Edit& edit;
     std::vector<std::unique_ptr<LoopTrack>> loopTracks;
     bool masterBPMSet = false;
+    int detectedBarCount = 0;
     QuantizeManager quantizeManager;
 
     void rebuildLoopTracks();

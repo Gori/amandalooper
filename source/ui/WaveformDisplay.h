@@ -4,10 +4,6 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 #include "AmlpLookAndFeel.h"
 
-/**
-    Displays an audio waveform with playback cursor and loop region.
-    Uses juce::AudioThumbnail for efficient rendering.
-*/
 class WaveformDisplay : public juce::Component,
                         private juce::Timer
 {
@@ -15,23 +11,15 @@ public:
     WaveformDisplay();
     ~WaveformDisplay() override;
 
-    /** Set the audio file to display. */
     void setSource (const juce::File& audioFile);
-
-    /** Get the currently loaded file. */
     juce::File getCurrentFile() const { return currentFile; }
-
-    /** Clear the display. */
     void clearSource();
-
-    /** Set normalized playback position (0.0 - 1.0). */
     void setPlaybackPosition (double normalizedPos);
-
-    /** Set the track colour for the waveform. */
     void setTrackColour (juce::Colour colour);
-
-    /** Set whether this track is recording. */
     void setRecording (bool isRecording);
+    void setCountIn (int barsRemaining);
+
+    void setBeatGrid (double bpm, int beatsPerBar, int numBars);
 
     void paint (juce::Graphics& g) override;
     void resized() override {}
@@ -45,6 +33,11 @@ private:
     double playbackPosition = 0.0;
     juce::Colour trackColour = AmlpLookAndFeel::getPlayingColour();
     bool recording = false;
+    int countInBarsRemaining = 0;
+
+    double gridBPM = 0.0;
+    int gridBeatsPerBar = 4;
+    int gridNumBars = 0;
 
     void timerCallback() override;
 

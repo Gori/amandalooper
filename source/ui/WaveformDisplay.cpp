@@ -45,16 +45,45 @@ void WaveformDisplay::setRecording (bool isRecording)
     repaint();
 }
 
+void WaveformDisplay::setCountIn (int barsRemaining)
+{
+    countInBarsRemaining = barsRemaining;
+}
+
+void WaveformDisplay::setBeatGrid (double bpm, int beatsPerBar, int numBars)
+{
+    gridBPM = bpm;
+    gridBeatsPerBar = beatsPerBar;
+    gridNumBars = numBars;
+}
+
 void WaveformDisplay::paint (juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
 
-    // Background
     g.setColour (AmlpLookAndFeel::getBackgroundColour().darker (0.3f));
     g.fillRoundedRectangle (bounds, 4.0f);
 
     if (thumbnail.getTotalLength() > 0.0)
     {
+        // Draw beat grid behind waveform
+        if (gridBPM > 0.0 && gridNumBars > 0)
+        {
+            int totalBeats = gridNumBars * gridBeatsPerBar;
+            float beatWidth = bounds.getWidth() / (float) totalBeats;
+
+            for (int i = 0; i <= totalBeats; ++i)
+            {
+                float x = bounds.getX() + (float) i * beatWidth;
+                bool isBarLine = (i % gridBeatsPerBar == 0);
+
+                g.setColour (isBarLine ? juce::Colours::white.withAlpha (0.25f)
+                                       : juce::Colours::white.withAlpha (0.08f));
+                g.drawLine (x, bounds.getY(), x, bounds.getBottom(),
+                            isBarLine ? 1.5f : 0.5f);
+            }
+        }
+
         // Draw waveform
         g.setColour (trackColour.withAlpha (0.7f));
         thumbnail.drawChannels (g, getLocalBounds().reduced (2),
@@ -70,18 +99,31 @@ void WaveformDisplay::paint (juce::Graphics& g)
     }
     else
     {
-        // Empty state
         g.setColour (AmlpLookAndFeel::getDimTextColour());
         g.setFont (juce::FontOptions (14.0f));
         g.drawText (recording ? "Recording..." : "Empty",
                     getLocalBounds(), juce::Justification::centred);
     }
 
-    // Recording indicator border
     if (recording)
     {
         g.setColour (AmlpLookAndFeel::getRecordingColour());
         g.drawRoundedRectangle (bounds.reduced (1.0f), 4.0f, 2.0f);
+    }
+
+    // Count-in overlay
+    if (countInBarsRemaining > 0)
+    {
+        g.setColour (AmlpLookAndFeel::getRecordingColour().withAlpha (0.3f));
+        g.fillRoundedRectangle (bounds, 4.0f);
+
+        g.setColour (juce::Colours::white);
+        g.setFont (juce::FontOptions (48.0f, juce::Font::bold));
+        g.drawText (juce::String (countInBarsRemaining),
+                    getLocalBounds(), juce::Justification::centred);
+
+        g.setColour (AmlpLookAndFeel::getRecordingColour());
+        g.drawRoundedRectangle (bounds.reduced (1.0f), 4.0f, 3.0f);
     }
 }
 

@@ -2,59 +2,97 @@
 
 TransportBar::TransportBar()
 {
-    // Record button - red
-    recordButton.setColour (juce::TextButton::buttonColourId, AmlpLookAndFeel::getRecordingColour().darker (0.5f));
-    recordButton.onClick = [this] { if (onRecord) onRecord(); };
-    addAndMakeVisible (recordButton);
+    playPauseButton.setColour (juce::TextButton::buttonColourId, AmlpLookAndFeel::getSurfaceColour());
+    playPauseButton.onClick = [this] { if (onPlayPause) onPlayPause(); };
+    addAndMakeVisible (playPauseButton);
 
-    // Play button - green
-    playButton.setColour (juce::TextButton::buttonColourId, AmlpLookAndFeel::getPlayingColour().darker (0.5f));
-    playButton.onClick = [this] { if (onPlay) onPlay(); };
-    addAndMakeVisible (playButton);
-
-    // Stop button
     stopButton.setColour (juce::TextButton::buttonColourId, AmlpLookAndFeel::getSurfaceColour());
     stopButton.onClick = [this] { if (onStop) onStop(); };
     addAndMakeVisible (stopButton);
 
-    // Overdub button - yellow
-    overdubButton.setColour (juce::TextButton::buttonColourId, AmlpLookAndFeel::getOverdubbingColour().darker (0.5f));
-    overdubButton.onClick = [this] { if (onOverdub) onOverdub(); };
+    recordButton.setColour (juce::TextButton::buttonColourId, AmlpLookAndFeel::getSurfaceColour());
+    recordButton.onClick = [this] { if (onRecord) onRecord(); };
+    addAndMakeVisible (recordButton);
+
+    overdubButton.setColour (juce::TextButton::buttonColourId, AmlpLookAndFeel::getSurfaceColour());
+    overdubButton.onClick = [this] { if (onOverdubToggle) onOverdubToggle(); };
     addAndMakeVisible (overdubButton);
 
-    // Metronome toggle
     metronomeButton.setColour (juce::TextButton::buttonColourId, AmlpLookAndFeel::getSurfaceColour());
     metronomeButton.onClick = [this] { if (onMetronomeToggle) onMetronomeToggle(); };
     addAndMakeVisible (metronomeButton);
 
-    // Tap tempo
-    tapTempoButton.setColour (juce::TextButton::buttonColourId, AmlpLookAndFeel::getSurfaceColour());
-    tapTempoButton.onClick = [this] { if (onTapTempo) onTapTempo(); };
-    addAndMakeVisible (tapTempoButton);
+    settingsButton.setColour (juce::TextButton::buttonColourId, AmlpLookAndFeel::getSurfaceColour());
+    settingsButton.onClick = [this] { if (onSettings) onSettings(); };
+    addAndMakeVisible (settingsButton);
 
-    // BPM display
-    bpmLabel.setText ("BPM", juce::dontSendNotification);
-    bpmLabel.setColour (juce::Label::textColourId, AmlpLookAndFeel::getDimTextColour());
-    bpmLabel.setJustificationType (juce::Justification::centredRight);
-    addAndMakeVisible (bpmLabel);
+    // Large time display
+    timeDisplay.setText ("--:--:--", juce::dontSendNotification);
+    timeDisplay.setFont (juce::FontOptions (28.0f, juce::Font::bold));
+    timeDisplay.setColour (juce::Label::textColourId, AmlpLookAndFeel::getTextColour());
+    timeDisplay.setJustificationType (juce::Justification::centred);
+    addAndMakeVisible (timeDisplay);
 
-    // BPM slider
-    bpmSlider.setRange (40.0, 240.0, 1.0);
-    bpmSlider.setValue (120.0, juce::dontSendNotification);
-    bpmSlider.setTextBoxStyle (juce::Slider::TextBoxLeft, false, 50, 30);
-    bpmSlider.setColour (juce::Slider::textBoxTextColourId, AmlpLookAndFeel::getTextColour());
-    bpmSlider.setColour (juce::Slider::textBoxBackgroundColourId, AmlpLookAndFeel::getSurfaceColour());
-    bpmSlider.onValueChange = [this]
+    // BPM text field
+    bpmField.setText ("FREE", juce::dontSendNotification);
+    bpmField.setFont (juce::FontOptions (16.0f, juce::Font::bold));
+    bpmField.setColour (juce::Label::textColourId, AmlpLookAndFeel::getTextColour());
+    bpmField.setColour (juce::Label::backgroundColourId, AmlpLookAndFeel::getSurfaceColour());
+    bpmField.setColour (juce::Label::outlineColourId, AmlpLookAndFeel::getSurfaceColour().brighter (0.3f));
+    bpmField.setJustificationType (juce::Justification::centred);
+    bpmField.setEditable (true);
+    bpmField.onTextChange = [this]
     {
-        if (onBpmChange)
-            onBpmChange (bpmSlider.getValue());
+        auto text = bpmField.getText().trim();
+        double bpm = text.getDoubleValue();
+        if (bpm >= 40.0 && bpm <= 240.0 && onBpmChange)
+            onBpmChange (bpm);
     };
-    addAndMakeVisible (bpmSlider);
+    addAndMakeVisible (bpmField);
+
+    // Bar count selector
+    barCountSelector.addItem ("1 bar", 1);
+    barCountSelector.addItem ("2 bars", 2);
+    barCountSelector.addItem ("4 bars", 4);
+    barCountSelector.addItem ("8 bars", 8);
+    barCountSelector.addItem ("16 bars", 16);
+    barCountSelector.setVisible (false);
+    barCountSelector.onChange = [this]
+    {
+        if (onBarCountChange)
+            onBarCountChange (barCountSelector.getSelectedId());
+    };
+    addAndMakeVisible (barCountSelector);
 }
 
 void TransportBar::setBpm (double bpm)
 {
-    bpmSlider.setValue (bpm, juce::dontSendNotification);
+    bpmField.setText (juce::String ((int) bpm), juce::dontSendNotification);
+
+    if (freeMode)
+        setFreeMode (false);
+}
+
+void TransportBar::setFreeMode (bool isFree)
+{
+    freeMode = isFree;
+    barCountSelector.setVisible (! isFree);
+    bpmField.setEditable (! isFree);
+
+    if (isFree)
+    {
+        bpmField.setText ("FREE", juce::dontSendNotification);
+        timeDisplay.setText ("--:--:--", juce::dontSendNotification);
+    }
+}
+
+void TransportBar::setPlaying (bool isPlaying)
+{
+    playPauseButton.setButtonText (isPlaying ? juce::String::fromUTF8 ("\xe2\x8f\xb8")
+                                             : juce::String::fromUTF8 ("\xe2\x96\xb6"));
+    playPauseButton.setColour (juce::TextButton::buttonColourId,
+        isPlaying ? AmlpLookAndFeel::getPlayingColour().darker (0.3f)
+                  : AmlpLookAndFeel::getSurfaceColour());
 }
 
 void TransportBar::setRecording (bool isRecording)
@@ -62,23 +100,13 @@ void TransportBar::setRecording (bool isRecording)
     recordButton.setColour (juce::TextButton::buttonColourId,
         isRecording ? AmlpLookAndFeel::getRecordingColour()
                     : AmlpLookAndFeel::getRecordingColour().darker (0.5f));
-    recordButton.repaint();
-}
-
-void TransportBar::setPlaying (bool isPlaying)
-{
-    playButton.setColour (juce::TextButton::buttonColourId,
-        isPlaying ? AmlpLookAndFeel::getPlayingColour()
-                  : AmlpLookAndFeel::getPlayingColour().darker (0.5f));
-    playButton.repaint();
 }
 
 void TransportBar::setOverdubbing (bool isOverdubbing)
 {
     overdubButton.setColour (juce::TextButton::buttonColourId,
         isOverdubbing ? AmlpLookAndFeel::getOverdubbingColour()
-                      : AmlpLookAndFeel::getOverdubbingColour().darker (0.5f));
-    overdubButton.repaint();
+                      : AmlpLookAndFeel::getSurfaceColour());
 }
 
 void TransportBar::setMetronomeEnabled (bool enabled)
@@ -86,7 +114,27 @@ void TransportBar::setMetronomeEnabled (bool enabled)
     metronomeButton.setColour (juce::TextButton::buttonColourId,
         enabled ? AmlpLookAndFeel::getArmedColour()
                 : AmlpLookAndFeel::getSurfaceColour());
-    metronomeButton.repaint();
+}
+
+void TransportBar::setBarCount (int bars)
+{
+    // Select the matching item, or closest
+    if (barCountSelector.indexOfItemId (bars) >= 0)
+        barCountSelector.setSelectedId (bars, juce::dontSendNotification);
+}
+
+void TransportBar::setCountingIn (bool countingIn)
+{
+    recordButton.setButtonText (countingIn ? juce::String::fromUTF8 ("\xe2\x8f\xb3")
+                                           : juce::String::fromUTF8 ("\xe2\x8f\xba"));
+}
+
+void TransportBar::setBarPosition (int bar, int beat, int ticks)
+{
+    auto text = juce::String (bar).paddedLeft ('0', 2) + ":"
+              + juce::String (beat).paddedLeft ('0', 2) + ":"
+              + juce::String (ticks).paddedLeft ('0', 2);
+    timeDisplay.setText (text, juce::dontSendNotification);
 }
 
 void TransportBar::paint (juce::Graphics& g)
@@ -97,25 +145,32 @@ void TransportBar::paint (juce::Graphics& g)
 void TransportBar::resized()
 {
     auto bounds = getLocalBounds().reduced (6);
-    int buttonW = 80;
-    int spacing = 6;
+    int buttonW = 55;
+    int spacing = 4;
 
-    recordButton.setBounds (bounds.removeFromLeft (buttonW));
-    bounds.removeFromLeft (spacing);
-    playButton.setBounds (bounds.removeFromLeft (buttonW));
+    playPauseButton.setBounds (bounds.removeFromLeft (buttonW));
     bounds.removeFromLeft (spacing);
     stopButton.setBounds (bounds.removeFromLeft (buttonW));
     bounds.removeFromLeft (spacing);
-    overdubButton.setBounds (bounds.removeFromLeft (buttonW));
-
-    bounds.removeFromLeft (spacing * 3);
-
-    metronomeButton.setBounds (bounds.removeFromLeft (60));
+    recordButton.setBounds (bounds.removeFromLeft (buttonW));
     bounds.removeFromLeft (spacing);
-    tapTempoButton.setBounds (bounds.removeFromLeft (50));
+    overdubButton.setBounds (bounds.removeFromLeft (buttonW));
+    bounds.removeFromLeft (spacing);
+    metronomeButton.setBounds (bounds.removeFromLeft (buttonW));
+    bounds.removeFromLeft (spacing);
+    settingsButton.setBounds (bounds.removeFromLeft (40));
 
-    bounds.removeFromLeft (spacing * 3);
+    bounds.removeFromLeft (spacing * 2);
 
-    bpmLabel.setBounds (bounds.removeFromLeft (35));
-    bpmSlider.setBounds (bounds.removeFromLeft (180));
+    // Time display — large, centered
+    timeDisplay.setBounds (bounds.removeFromLeft (160));
+
+    bounds.removeFromLeft (spacing * 2);
+
+    // BPM field
+    bpmField.setBounds (bounds.removeFromLeft (60));
+    bounds.removeFromLeft (spacing);
+
+    // Bar count selector
+    barCountSelector.setBounds (bounds.removeFromLeft (80));
 }

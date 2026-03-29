@@ -3,42 +3,47 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include "AmlpLookAndFeel.h"
 
-/**
-    Top transport bar with BPM, record/play/stop/overdub buttons,
-    metronome toggle, and master volume.
-*/
 class TransportBar : public juce::Component
 {
 public:
     TransportBar();
 
-    // Callbacks — set these from MainComponent
-    std::function<void()> onRecord;
-    std::function<void()> onPlay;
+    // Callbacks
+    std::function<void()> onPlayPause;
     std::function<void()> onStop;
-    std::function<void()> onOverdub;
+    std::function<void()> onRecord;
+    std::function<void()> onOverdubToggle;
     std::function<void()> onMetronomeToggle;
-    std::function<void()> onTapTempo;
+    std::function<void()> onSettings;
     std::function<void (double)> onBpmChange;
+    std::function<void (int)> onBarCountChange;
 
     void setBpm (double bpm);
-    void setRecording (bool isRecording);
+    void setFreeMode (bool isFree);
     void setPlaying (bool isPlaying);
+    void setRecording (bool isRecording);
     void setOverdubbing (bool isOverdubbing);
     void setMetronomeEnabled (bool enabled);
+    void setCountingIn (bool countingIn);
+    void setBarPosition (int bar, int beat, int ticks);
+    void setBarCount (int bars);
 
     void paint (juce::Graphics& g) override;
     void resized() override;
 
+    bool freeMode = true;
+
 private:
-    juce::TextButton recordButton { "REC" };
-    juce::TextButton playButton { "PLAY" };
-    juce::TextButton stopButton { "STOP" };
-    juce::TextButton overdubButton { "OVERDUB" };
-    juce::TextButton metronomeButton { "METRO" };
-    juce::TextButton tapTempoButton { "TAP" };
-    juce::Label bpmLabel;
-    juce::Slider bpmSlider;
+    juce::TextButton playPauseButton { juce::String::fromUTF8 ("\xe2\x96\xb6") };
+    juce::TextButton stopButton { juce::String::fromUTF8 ("\xe2\x8f\xb9") };
+    juce::TextButton recordButton { juce::String::fromUTF8 ("\xe2\x8f\xba") };
+    juce::TextButton overdubButton { juce::String::fromUTF8 ("\xe2\x99\xbb") };
+    juce::TextButton metronomeButton { juce::String::fromUTF8 ("\xf0\x9f\xa5\x81") };
+    juce::TextButton settingsButton { juce::String::fromUTF8 ("\xe2\x9a\x99") };
+
+    juce::Label timeDisplay;
+    juce::Label bpmField;
+    juce::ComboBox barCountSelector;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TransportBar)
 };

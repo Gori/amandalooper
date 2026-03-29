@@ -89,7 +89,9 @@ target_sources(AMLP PRIVATE
     source/ui/SceneBar.h
     source/ui/SceneBar.cpp
     source/ui/LevelMeter.h
-    source/ui/LevelMeter.cpp)
+    source/ui/LevelMeter.cpp
+    source/ui/SettingsPanel.h
+    source/ui/SettingsPanel.cpp)
 
 target_include_directories(AMLP PRIVATE source)
 

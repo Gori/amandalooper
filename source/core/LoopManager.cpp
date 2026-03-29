@@ -76,6 +76,11 @@ void LoopManager::detectAndSetTempoFromFirstLoop (double loopLengthSeconds)
     {
         bpm = TempoDetector::snapToMusicalBPM (bpm);
         setMasterBPM (bpm);
+
+        // Calculate the bar count that produced this BPM
+        double beatsPerBar = 4.0;
+        double totalBeats = (loopLengthSeconds * bpm) / 60.0;
+        detectedBarCount = std::max (1, (int) std::round (totalBeats / beatsPerBar));
     }
 }
 
@@ -105,7 +110,7 @@ void LoopManager::rebuildLoopTracks()
     int index = 0;
     for (auto track : te::getAudioTracks (edit))
     {
-        loopTracks.push_back (std::make_unique<LoopTrack> (*track, index));
+        loopTracks.push_back (std::make_unique<LoopTrack> (*track, index, *this));
         ++index;
     }
 }

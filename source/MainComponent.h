@@ -5,12 +5,13 @@
 #include "core/LoopManager.h"
 #include "core/SceneManager.h"
 #include "core/Metronome.h"
-#include "midi/TapTempoHandler.h"
+#include "core/TimeStretchManager.h"
 #include "ui/AmlpLookAndFeel.h"
 #include "ui/TransportBar.h"
 #include "ui/TrackPanel.h"
 #include "ui/SceneBar.h"
 #include "ui/LevelMeter.h"
+#include "ui/SettingsPanel.h"
 
 class MainComponent : public juce::Component,
                       private juce::Timer
@@ -23,13 +24,11 @@ public:
     void resized() override;
 
 private:
-    // Engine
     AmlpLookAndFeel lookAndFeel;
     AmlpEngine amlpEngine;
     std::unique_ptr<LoopManager> loopManager;
     std::unique_ptr<SceneManager> sceneManager;
     std::unique_ptr<Metronome> metronome;
-    TapTempoHandler tapTempo;
 
     // UI
     TransportBar transportBar;
@@ -38,9 +37,9 @@ private:
     juce::TextButton audioSettingsButton { "Audio Settings" };
     juce::Label deviceStatusLabel;
     LevelMeter masterMeter { LevelMeter::Orientation::vertical };
+    SettingsPanel settingsPanel;
     juce::AudioDeviceManager::LevelMeter::Ptr inputLevelMeter;
 
-    // Selected track for operations
     int selectedTrack = 0;
 
     void setupEngine();
@@ -48,6 +47,8 @@ private:
     void connectCallbacks();
     void updateUI();
     void timerCallback() override;
+    void showSettingsPanel();
+    void onBpmDetected();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainComponent)
 };

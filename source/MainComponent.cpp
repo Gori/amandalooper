@@ -28,7 +28,8 @@ void MainComponent::setupEngine()
     sceneManager = std::make_unique<SceneManager> (edit);
     metronome = std::make_unique<Metronome> (edit);
 
-    loopManager->setMasterBPM (120.0);
+    // No hardcoded BPM — starts in FREE mode
+    // BPM will be set by the first recording
 
     for (int i = 0; i < sceneManager->getNumScenes(); ++i)
         sceneManager->setSceneName (i, "Scene " + juce::String (i + 1));
@@ -37,6 +38,7 @@ void MainComponent::setupEngine()
 void MainComponent::setupUI()
 {
     addAndMakeVisible (transportBar);
+    transportBar.setFreeMode (true);
 
     for (int i = 0; i < loopManager->getTrackCount(); ++i)
     {
@@ -61,40 +63,56 @@ void MainComponent::setupUI()
 
     addAndMakeVisible (masterMeter);
 
-    transportBar.setBpm (loopManager->getMasterBPM());
+    settingsPanel.setVisible (false);
+    addChildComponent (settingsPanel);
 
-    // Hold a reference to the input level meter so JUCE measures input levels
     inputLevelMeter = amlpEngine.getEngine().getDeviceManager().deviceManager.getInputLevelGetter();
 }
 
 void MainComponent::connectCallbacks()
 {
+    transportBar.onPlayPause = [this]
+    {
+        auto& transport = amlpEngine.getTransport();
+
+        if (transport.isPlaying())
+        {
+            // Pause — stop transport but keep track states (playheads freeze)
+            transport.stop (false, false);
+        }
+        else
+        {
+            // Resume/Play — start transport and trigger all tracks with clips
+            transport.play (false);
+
+            for (int i = 0; i < loopManager->getTrackCount(); ++i)
+                if (auto* t = loopManager->getTrack (i))
+                    if (t->getClipInSlot (0) != nullptr && t->getState() == LoopTrack::State::idle)
+                        t->triggerSlot (0);
+        }
+    };
+
+    transportBar.onStop = [this]
+    {
+        // Full stop — reset everything to beginning
+        loopManager->stopAllTracks();
+        amlpEngine.getTransport().stop (false, false);
+        amlpEngine.getTransport().setPosition (tracktion::TimePosition());
+    };
+
     transportBar.onRecord = [this]
     {
         if (auto* track = loopManager->getTrack (selectedTrack))
         {
-            if (track->getState() == LoopTrack::State::recording)
+            if (track->getState() == LoopTrack::State::recording
+                || track->getState() == LoopTrack::State::countingIn)
                 track->stopRecording();
             else
                 track->startRecording (0);
         }
     };
 
-    transportBar.onPlay = [this]
-    {
-        if (auto* track = loopManager->getTrack (selectedTrack))
-        {
-            if (track->getState() == LoopTrack::State::idle)
-                track->triggerSlot (0);
-        }
-    };
-
-    transportBar.onStop = [this]
-    {
-        loopManager->stopAllTracks();
-    };
-
-    transportBar.onOverdub = [this]
+    transportBar.onOverdubToggle = [this]
     {
         if (auto* track = loopManager->getTrack (selectedTrack))
         {
@@ -117,21 +135,44 @@ void MainComponent::connectCallbacks()
             transport.play (false);
     };
 
-    transportBar.onTapTempo = [this]
+    transportBar.onBpmChange = [this] (double bpm)
     {
-        tapTempo.tap();
-        double bpm = tapTempo.getBPM();
-        if (bpm > 0.0)
+        double oldBpm = loopManager->getMasterBPM();
+        loopManager->setMasterBPM (bpm);
+
+        // If this is the first time BPM is set manually, show bar count selector with default 4 bars
+        if (transportBar.freeMode)
         {
-            loopManager->setMasterBPM (bpm);
-            transportBar.setBpm (bpm);
+            transportBar.setFreeMode (false);
+            transportBar.setBarCount (4);
+            for (int i = 0; i < loopManager->getTrackCount(); ++i)
+                if (auto* lt = loopManager->getTrack (i))
+                    lt->setRecordingBarCount (4);
+        }
+
+        // Time-stretch existing clips to the new BPM
+        if (oldBpm > 0.0)
+        {
+            for (int i = 0; i < loopManager->getTrackCount(); ++i)
+            {
+                if (auto* lt = loopManager->getTrack (i))
+                {
+                    if (auto* clip = lt->getClipInSlot (lt->getActiveSlotIndex()))
+                        TimeStretchManager::setClipTempo (*clip, bpm);
+                }
+            }
         }
     };
 
-    transportBar.onBpmChange = [this] (double bpm)
+    transportBar.onBarCountChange = [this] (int bars)
     {
-        loopManager->setMasterBPM (bpm);
+        // Set recording bar count for all tracks
+        for (int i = 0; i < loopManager->getTrackCount(); ++i)
+            if (auto* lt = loopManager->getTrack (i))
+                lt->setRecordingBarCount (bars);
     };
+
+    transportBar.onSettings = [this] { showSettingsPanel(); };
 
     for (int i = 0; i < trackPanels.size(); ++i)
     {
@@ -180,6 +221,8 @@ void MainComponent::connectCallbacks()
 
 void MainComponent::updateUI()
 {
+    bool bpmIsSet = loopManager->hasMasterBPM();
+
     for (int i = 0; i < trackPanels.size() && i < loopManager->getTrackCount(); ++i)
     {
         auto* loopTrack = loopManager->getTrack (i);
@@ -189,6 +232,9 @@ void MainComponent::updateUI()
 
         auto state = loopTrack->getState();
         panel->setRecording (state == LoopTrack::State::recording);
+
+        // Count-in overlay on waveform
+        panel->getWaveformDisplay().setCountIn (loopTrack->getCountInBeatsRemaining());
         panel->setPlaying (state == LoopTrack::State::playing);
         panel->setOverdubbing (state == LoopTrack::State::overdubbing);
         panel->setActiveSlot (loopTrack->getActiveSlotIndex());
@@ -196,7 +242,7 @@ void MainComponent::updateUI()
 
         auto& teTrack = loopTrack->getTrack();
 
-        // Update waveform display if a clip exists in the active slot
+        // Waveform display
         if (auto* clip = loopTrack->getClipInSlot (loopTrack->getActiveSlotIndex()))
         {
             auto file = clip->getOriginalFile();
@@ -205,31 +251,38 @@ void MainComponent::updateUI()
             if (waveform.getCurrentFile() != file)
                 waveform.setSource (file);
 
-            // Update playback position
-            if (auto handle = clip->getLaunchHandle())
-            {
-                if (auto playedRange = handle->getPlayedRange())
-                {
-                    auto& ts = amlpEngine.getEdit().tempoSequence;
-                    auto clipLength = clip->getPosition().getLength().inSeconds();
+            // Beat grid
+            if (bpmIsSet)
+                waveform.setBeatGrid (loopManager->getMasterBPM(), 4,
+                                       loopManager->getDetectedBarCount());
 
-                    if (clipLength > 0.0)
-                    {
-                        auto posTime = ts.toTime (playedRange->getEnd()).inSeconds();
-                        waveform.setPlaybackPosition (std::fmod (posTime, clipLength) / clipLength);
-                    }
+            // Playback cursor — each track uses its own bar count but BPM-derived length for sync
+            if ((state == LoopTrack::State::playing || state == LoopTrack::State::overdubbing)
+                && amlpEngine.getTransport().isPlaying() && bpmIsSet)
+            {
+                double barLength = (4.0 * 60.0) / loopManager->getMasterBPM();
+
+                // Calculate this clip's bar count from its actual length
+                auto clipSeconds = clip->getPosition().getLength().inSeconds();
+                int clipBars = juce::jmax (1, (int) std::round (clipSeconds / barLength));
+                double loopLength = barLength * clipBars;
+
+                if (loopLength > 0.0)
+                {
+                    auto pos = amlpEngine.getTransport().getPosition().inSeconds();
+                    waveform.setPlaybackPosition (std::fmod (pos, loopLength) / loopLength);
                 }
             }
         }
 
-        // Output level from TE's LevelMeterPlugin
+        // Output level
         if (auto* levelPlugin = teTrack.getLevelMeterPlugin())
         {
             auto cache = levelPlugin->measurer.getLevelCache();
             panel->setOutputLevel (te::dbToGain (cache.first), te::dbToGain (cache.second));
         }
 
-        // Input level — only show on armed tracks
+        // Input level — only on armed track
         if (i == selectedTrack && inputLevelMeter != nullptr)
         {
             auto level = (float) inputLevelMeter->getCurrentLevel();
@@ -241,12 +294,67 @@ void MainComponent::updateUI()
         }
     }
 
-    if (auto* loopTrack = loopManager->getTrack (selectedTrack))
+    // Transport state
     {
-        transportBar.setRecording (loopTrack->getState() == LoopTrack::State::recording);
-        transportBar.setPlaying (loopTrack->getState() == LoopTrack::State::playing);
-        transportBar.setOverdubbing (loopTrack->getState() == LoopTrack::State::overdubbing);
+        bool anyPlaying = false;
+        bool anyRecording = false;
+        bool anyOverdubbing = false;
+        bool anyCountingIn = false;
+
+        for (int i = 0; i < loopManager->getTrackCount(); ++i)
+        {
+            if (auto* lt = loopManager->getTrack (i))
+            {
+                auto s = lt->getState();
+                if (s == LoopTrack::State::playing)     anyPlaying = true;
+                if (s == LoopTrack::State::recording)   anyRecording = true;
+                if (s == LoopTrack::State::overdubbing)  anyOverdubbing = true;
+                if (s == LoopTrack::State::countingIn)   anyCountingIn = true;
+            }
+        }
+
+        transportBar.setPlaying (anyPlaying || amlpEngine.getTransport().isPlaying());
+        transportBar.setRecording (anyRecording);
+        transportBar.setOverdubbing (anyOverdubbing);
+        transportBar.setCountingIn (anyCountingIn);
     }
+
+    // Time display — wraps at longest loop length
+    if (bpmIsSet && amlpEngine.getTransport().isPlaying())
+    {
+        // Find the longest clip length across all tracks
+        double longestClipSeconds = 0.0;
+        for (int i = 0; i < loopManager->getTrackCount(); ++i)
+        {
+            if (auto* lt = loopManager->getTrack (i))
+            {
+                if (auto* clip = lt->getClipInSlot (lt->getActiveSlotIndex()))
+                {
+                    auto len = clip->getPosition().getLength().inSeconds();
+                    if (len > longestClipSeconds)
+                        longestClipSeconds = len;
+                }
+            }
+        }
+
+        auto posSeconds = amlpEngine.getTransport().getPosition().inSeconds();
+
+        // Wrap position within the longest loop
+        if (longestClipSeconds > 0.0)
+            posSeconds = std::fmod (posSeconds, longestClipSeconds);
+
+        auto wrappedPos = tracktion::TimePosition::fromSeconds (posSeconds);
+        auto barsAndBeats = amlpEngine.getEdit().tempoSequence.toBarsAndBeats (wrappedPos);
+        int bar = barsAndBeats.bars + 1;
+        double beatFrac = barsAndBeats.beats.inBeats();
+        int beat = (int) beatFrac + 1;
+        int ticks = (int) ((beatFrac - (int) beatFrac) * 100.0);
+        transportBar.setBarPosition (bar, beat, ticks);
+    }
+
+    // Check if BPM was just detected (first recording completed)
+    if (bpmIsSet && transportBar.freeMode)
+        onBpmDetected();
 
     // Master output meter
     float masterL = 0.0f, masterR = 0.0f;
@@ -284,6 +392,36 @@ void MainComponent::updateUI()
 void MainComponent::timerCallback()
 {
     updateUI();
+}
+
+void MainComponent::onBpmDetected()
+{
+    transportBar.setBpm (loopManager->getMasterBPM());
+    transportBar.setFreeMode (false);
+    transportBar.setBarCount (loopManager->getDetectedBarCount());
+
+    // Auto-enable metronome if settings say so
+    if (settingsPanel.getAutoMetronome())
+    {
+        metronome->setEnabled (true);
+        metronome->setRecordingOnly (false);
+        transportBar.setMetronomeEnabled (true);
+    }
+
+    // Set quantization to bar boundaries now that we have a tempo
+    loopManager->getQuantizeManager().setMode (QuantizeManager::QuantizeMode::bar);
+}
+
+void MainComponent::showSettingsPanel()
+{
+    settingsPanel.setVisible (! settingsPanel.isVisible());
+
+    if (settingsPanel.isVisible())
+    {
+        auto centre = getLocalBounds().getCentre();
+        settingsPanel.setBounds (centre.x - 150, centre.y - 100, 300, 200);
+        settingsPanel.toFront (true);
+    }
 }
 
 void MainComponent::paint (juce::Graphics& g)
