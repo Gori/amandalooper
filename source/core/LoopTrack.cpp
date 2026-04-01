@@ -63,21 +63,62 @@ void LoopTrack::startRecording (int slotIndex)
     }
     else
     {
-        // Free mode — record immediately, first loop sets BPM
-        state = State::recording;
-        autoStopTimeSeconds = 0.0;
+        // Free mode — first loop sets BPM
+        if (thresholdRecording)
+        {
+            // Wait for audio input to exceed threshold before recording
+            state = State::waitingForThreshold;
+            startTimerHz (120);
+        }
+        else
+        {
+            // Record immediately
+            state = State::recording;
+            autoStopTimeSeconds = 0.0;
 
-        auto& transport = track.edit.getTransport();
-        if (! transport.isPlaying())
-            transport.play (false);
+            auto& transport = track.edit.getTransport();
+            if (! transport.isPlaying())
+                transport.play (false);
 
-        transport.record (false);
-        recordingStartTime = transport.getPosition().inSeconds();
+            transport.record (false);
+            recordingStartTime = transport.getPosition().inSeconds();
+        }
     }
 }
 
 void LoopTrack::timerCallback()
 {
+    if (state == State::waitingForThreshold)
+    {
+        // Check input level — use the InputDevice's level measurer
+        for (auto instance : track.edit.getAllInputDevices())
+        {
+            if (instance->getInputDevice().getDeviceType() == te::InputDevice::waveDevice
+                && te::isOnTargetTrack (*instance, track, 0))
+            {
+                auto cache = instance->getInputDevice().levelMeasurer.getLevelCache();
+                float level = te::dbToGain (cache.first);
+
+                if (level >= thresholdLevel)
+                {
+                    // Audio detected — start recording
+                    stopTimer();
+                    state = State::recording;
+                    autoStopTimeSeconds = 0.0;
+
+                    auto& transport = track.edit.getTransport();
+                    if (! transport.isPlaying())
+                        transport.play (false);
+
+                    transport.record (false);
+                    recordingStartTime = transport.getPosition().inSeconds();
+                    return;
+                }
+            }
+        }
+        return;
+    }
+
     auto& transport = track.edit.getTransport();
 
     if (! transport.isPlaying())
@@ -122,8 +163,8 @@ void LoopTrack::stopRecording()
 {
     if (state != State::recording)
     {
-        // Cancel count-in
-        if (state == State::countingIn)
+        // Cancel count-in or threshold wait
+        if (state == State::countingIn || state == State::waitingForThreshold)
         {
             stopTimer();
             armTrackInput (false);

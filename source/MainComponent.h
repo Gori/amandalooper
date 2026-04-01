@@ -12,6 +12,9 @@
 #include "ui/SceneBar.h"
 #include "ui/LevelMeter.h"
 #include "ui/SettingsPanel.h"
+#include "ui/PluginBrowserPanel.h"
+#include "ui/PluginEditorWindow.h"
+#include "effects/EffectsChainManager.h"
 
 class MainComponent : public juce::Component,
                       private juce::Timer
@@ -38,7 +41,10 @@ private:
     juce::Label deviceStatusLabel;
     LevelMeter masterMeter { LevelMeter::Orientation::vertical };
     SettingsPanel settingsPanel;
+    PluginBrowserPanel pluginBrowser;
+    std::unique_ptr<EffectsChainManager> effectsManager;
     juce::AudioDeviceManager::LevelMeter::Ptr inputLevelMeter;
+    int pluginTargetTrack = -1; // -1 = master
 
     int selectedTrack = 0;
 

@@ -39,6 +39,10 @@ TrackPanel::TrackPanel (int trackIndex)
     soloButton.onClick = [this] { if (onSolo) onSolo(); };
     addAndMakeVisible (soloButton);
 
+    fxButton.setColour (juce::TextButton::buttonColourId, AmlpLookAndFeel::getSurfaceColour());
+    fxButton.onClick = [this] { if (onFxClicked) onFxClicked(); };
+    addAndMakeVisible (fxButton);
+
     // Waveform
     waveformDisplay.setTrackColour (trackColour);
     addAndMakeVisible (waveformDisplay);
@@ -201,9 +205,10 @@ void TrackPanel::resized()
 
     // R/M/S row
     auto btnRow = header.removeFromTop (24);
-    armButton.setBounds (btnRow.removeFromLeft (30).reduced (1));
-    muteButton.setBounds (btnRow.removeFromLeft (30).reduced (1));
-    soloButton.setBounds (btnRow.removeFromLeft (30).reduced (1));
+    armButton.setBounds (btnRow.removeFromLeft (28).reduced (1));
+    muteButton.setBounds (btnRow.removeFromLeft (28).reduced (1));
+    soloButton.setBounds (btnRow.removeFromLeft (28).reduced (1));
+    fxButton.setBounds (btnRow.removeFromLeft (28).reduced (1));
 
     // Volume
     volumeSlider.setBounds (header.removeFromTop (22));

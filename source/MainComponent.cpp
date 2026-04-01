@@ -27,6 +27,7 @@ void MainComponent::setupEngine()
 
     sceneManager = std::make_unique<SceneManager> (edit);
     metronome = std::make_unique<Metronome> (edit);
+    effectsManager = std::make_unique<EffectsChainManager> (edit);
 
     // No hardcoded BPM — starts in FREE mode
     // BPM will be set by the first recording
@@ -64,6 +65,27 @@ void MainComponent::setupUI()
 
     settingsPanel.setVisible (false);
     addChildComponent (settingsPanel);
+
+    pluginBrowser.setVisible (false);
+    pluginBrowser.onPluginSelected = [this] (const juce::PluginDescription& desc)
+    {
+        if (pluginTargetTrack >= 0)
+        {
+            if (auto* lt = loopManager->getTrack (pluginTargetTrack))
+                effectsManager->addExternalPlugin (lt->getTrack(), desc);
+        }
+        else
+        {
+            effectsManager->addExternalPluginToMaster (desc);
+        }
+        pluginBrowser.setVisible (false);
+    };
+    pluginBrowser.onScan = [this]
+    {
+        effectsManager->scanForPlugins();
+        pluginBrowser.setPlugins (effectsManager->getAvailablePlugins());
+    };
+    addChildComponent (pluginBrowser);
 
     inputLevelMeter = amlpEngine.getEngine().getDeviceManager().deviceManager.getInputLevelGetter();
 }
@@ -103,11 +125,18 @@ void MainComponent::connectCallbacks()
     {
         if (auto* track = loopManager->getTrack (selectedTrack))
         {
-            if (track->getState() == LoopTrack::State::recording
-                || track->getState() == LoopTrack::State::countingIn)
+            auto s = track->getState();
+            if (s == LoopTrack::State::recording
+                || s == LoopTrack::State::countingIn
+                || s == LoopTrack::State::waitingForThreshold)
+            {
                 track->stopRecording();
+            }
             else
-                track->startRecording (0);
+            {
+                track->setThresholdRecording (settingsPanel.getThresholdRecording());
+                track->startRecording (track->getActiveSlotIndex());
+            }
         }
     };
 
@@ -162,6 +191,16 @@ void MainComponent::connectCallbacks()
 
     transportBar.onSettings = [this] { showSettingsPanel(); };
 
+    transportBar.onMasterFx = [this]
+    {
+        pluginTargetTrack = -1; // master
+        pluginBrowser.setPlugins (effectsManager->getAvailablePlugins());
+        pluginBrowser.setVisible (true);
+        auto centre = getLocalBounds().getCentre();
+        pluginBrowser.setBounds (centre.x - 200, centre.y - 250, 400, 500);
+        pluginBrowser.toFront (true);
+    };
+
     for (int i = 0; i < trackPanels.size(); ++i)
     {
         auto* panel = trackPanels[i];
@@ -204,6 +243,16 @@ void MainComponent::connectCallbacks()
             if (auto* track = loopManager->getTrack (i))
                 track->triggerSlot (loopIndex);
         };
+
+        panel->onFxClicked = [this, i]
+        {
+            pluginTargetTrack = i;
+            pluginBrowser.setPlugins (effectsManager->getAvailablePlugins());
+            pluginBrowser.setVisible (true);
+            auto centre = getLocalBounds().getCentre();
+            pluginBrowser.setBounds (centre.x - 200, centre.y - 250, 400, 500);
+            pluginBrowser.toFront (true);
+        };
     }
 
     sceneBar.onLaunchScene = [this] (int sceneIndex)
@@ -234,8 +283,11 @@ void MainComponent::updateUI()
         auto state = loopTrack->getState();
         panel->setRecording (state == LoopTrack::State::recording);
 
-        // Count-in overlay on waveform
-        panel->getWaveformDisplay().setCountIn (loopTrack->getCountInBeatsRemaining());
+        // Count-in or threshold waiting overlay on waveform
+        if (state == LoopTrack::State::waitingForThreshold)
+            panel->getWaveformDisplay().setCountIn (-1); // -1 = waiting for audio
+        else
+            panel->getWaveformDisplay().setCountIn (loopTrack->getCountInBeatsRemaining());
         panel->setPlaying (state == LoopTrack::State::playing);
         panel->setOverdubbing (state == LoopTrack::State::overdubbing);
         panel->setArmed (i == selectedTrack);

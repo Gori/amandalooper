@@ -5,6 +5,10 @@ EffectsChainManager::EffectsChainManager (te::Edit& e)
 {
 }
 
+//==============================================================================
+// Built-in plugins
+//==============================================================================
+
 te::Plugin::Ptr EffectsChainManager::addEffect (te::AudioTrack& track, EffectType type)
 {
     auto xmlType = getXmlTypeName (type);
@@ -14,41 +18,6 @@ te::Plugin::Ptr EffectsChainManager::addEffect (te::AudioTrack& track, EffectTyp
         track.pluginList.insertPlugin (plugin, -1, nullptr);
 
     return plugin;
-}
-
-void EffectsChainManager::removeEffect (te::AudioTrack& track, int pluginIndex)
-{
-    if (auto* plugin = getUserPlugin (track, pluginIndex))
-        plugin->removeFromParent();
-}
-
-void EffectsChainManager::setBypass (te::AudioTrack& track, int pluginIndex, bool bypassed)
-{
-    if (auto* plugin = getUserPlugin (track, pluginIndex))
-        plugin->setEnabled (! bypassed);
-}
-
-bool EffectsChainManager::isBypassed (te::AudioTrack& track, int pluginIndex) const
-{
-    if (auto* plugin = getUserPlugin (track, pluginIndex))
-        return ! plugin->isEnabled();
-
-    return false;
-}
-
-int EffectsChainManager::getNumEffects (te::AudioTrack& track) const
-{
-    int count = 0;
-    for (auto plugin : track.pluginList)
-    {
-        // Skip built-in plugins (volume, level meter, etc.)
-        if (dynamic_cast<te::VolumeAndPanPlugin*> (plugin) == nullptr
-            && dynamic_cast<te::LevelMeterPlugin*> (plugin) == nullptr)
-        {
-            ++count;
-        }
-    }
-    return count;
 }
 
 const char* EffectsChainManager::getXmlTypeName (EffectType type)
@@ -82,16 +51,120 @@ juce::String EffectsChainManager::getEffectName (EffectType type)
 }
 
 //==============================================================================
+// External VST3/AU plugins
+//==============================================================================
+
+te::Plugin::Ptr EffectsChainManager::addExternalPlugin (te::AudioTrack& track,
+                                                         const juce::PluginDescription& desc)
+{
+    auto plugin = edit.getPluginCache().createNewPlugin (te::ExternalPlugin::xmlTypeName, desc);
+
+    if (plugin != nullptr)
+        track.pluginList.insertPlugin (plugin, -1, nullptr);
+
+    return plugin;
+}
+
+te::Plugin::Ptr EffectsChainManager::addExternalPluginToMaster (const juce::PluginDescription& desc)
+{
+    auto plugin = edit.getPluginCache().createNewPlugin (te::ExternalPlugin::xmlTypeName, desc);
+
+    if (plugin != nullptr)
+        edit.getMasterPluginList().insertPlugin (plugin, -1, nullptr);
+
+    return plugin;
+}
+
+//==============================================================================
+// Common operations
+//==============================================================================
+
+void EffectsChainManager::removePlugin (te::PluginList& pluginList, int pluginIndex)
+{
+    if (auto* plugin = getUserPlugin (pluginList, pluginIndex))
+        plugin->removeFromParent();
+}
+
+void EffectsChainManager::setBypass (te::PluginList& pluginList, int pluginIndex, bool bypassed)
+{
+    if (auto* plugin = getUserPlugin (pluginList, pluginIndex))
+        plugin->setEnabled (! bypassed);
+}
+
+bool EffectsChainManager::isBypassed (te::PluginList& pluginList, int pluginIndex) const
+{
+    if (auto* plugin = getUserPlugin (pluginList, pluginIndex))
+        return ! plugin->isEnabled();
+
+    return false;
+}
+
+int EffectsChainManager::getNumUserPlugins (te::PluginList& pluginList) const
+{
+    int count = 0;
+    for (auto plugin : pluginList)
+        if (! isBuiltInPlugin (plugin))
+            ++count;
+
+    return count;
+}
+
+//==============================================================================
+// Plugin scanning
+//==============================================================================
+
+juce::Array<juce::PluginDescription> EffectsChainManager::getAvailablePlugins() const
+{
+    return edit.engine.getPluginManager().knownPluginList.getTypes();
+}
+
+void EffectsChainManager::scanForPlugins()
+{
+    auto& pm = edit.engine.getPluginManager();
+    auto& formatManager = pm.pluginFormatManager;
+    auto& knownList = pm.knownPluginList;
+
+    for (int i = 0; i < formatManager.getNumFormats(); ++i)
+    {
+        auto* format = formatManager.getFormat (i);
+        auto searchPath = format->getDefaultLocationsToSearch();
+
+        for (int j = 0; j < searchPath.getNumPaths(); ++j)
+        {
+            auto dir = searchPath[j];
+            auto files = dir.findChildFiles (juce::File::findFiles, true);
+
+            for (auto& file : files)
+            {
+                juce::OwnedArray<juce::PluginDescription> found;
+                format->findAllTypesForFile (found, file.getFullPathName());
+
+                for (auto* desc : found)
+                    knownList.addType (*desc);
+            }
+        }
+    }
+}
+
+//==============================================================================
+// Master chain
+//==============================================================================
+
+te::PluginList& EffectsChainManager::getMasterPluginList()
+{
+    return edit.getMasterPluginList();
+}
+
+//==============================================================================
 // Private
 //==============================================================================
 
-te::Plugin* EffectsChainManager::getUserPlugin (te::AudioTrack& track, int index) const
+te::Plugin* EffectsChainManager::getUserPlugin (te::PluginList& pluginList, int index) const
 {
     int count = 0;
-    for (auto plugin : track.pluginList)
+    for (auto plugin : pluginList)
     {
-        if (dynamic_cast<te::VolumeAndPanPlugin*> (plugin) == nullptr
-            && dynamic_cast<te::LevelMeterPlugin*> (plugin) == nullptr)
+        if (! isBuiltInPlugin (plugin))
         {
             if (count == index)
                 return plugin;
@@ -99,4 +172,10 @@ te::Plugin* EffectsChainManager::getUserPlugin (te::AudioTrack& track, int index
         }
     }
     return nullptr;
+}
+
+bool EffectsChainManager::isBuiltInPlugin (te::Plugin* plugin)
+{
+    return dynamic_cast<te::VolumeAndPanPlugin*> (plugin) != nullptr
+        || dynamic_cast<te::LevelMeterPlugin*> (plugin) != nullptr;
 }

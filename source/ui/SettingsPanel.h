@@ -9,6 +9,7 @@ public:
     SettingsPanel();
 
     bool getAutoMetronome() const;
+    bool getThresholdRecording() const;
     int getDefaultBarCount() const;   // 0 = match first loop
     int getCountInBars() const;       // 1 or 2
 
@@ -17,6 +18,7 @@ public:
 
 private:
     juce::ToggleButton autoMetronomeToggle { "Auto-enable metronome after first recording" };
+    juce::ToggleButton thresholdRecordingToggle { "Start first recording on audio threshold" };
     juce::ComboBox defaultBarCountSelector;
     juce::ComboBox countInBarsSelector;
     juce::Label defaultBarCountLabel;

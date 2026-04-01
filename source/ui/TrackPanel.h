@@ -19,6 +19,7 @@ public:
     std::function<void (float)> onVolumeChange;
     std::function<void (RecordMode)> onModeChanged;
     std::function<void (int)> onLoopSelected;
+    std::function<void()> onFxClicked;
 
     void setTrackName (const juce::String& name);
     juce::String getTrackName() const;
@@ -52,6 +53,7 @@ private:
     juce::TextButton armButton { "R" };
     juce::TextButton muteButton { "M" };
     juce::TextButton soloButton { "S" };
+    juce::TextButton fxButton { "FX" };
     juce::Slider volumeSlider;
 
     // Waveform

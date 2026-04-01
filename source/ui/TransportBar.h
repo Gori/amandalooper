@@ -14,6 +14,7 @@ public:
     std::function<void()> onRecord;
     std::function<void()> onMetronomeToggle;
     std::function<void()> onSettings;
+    std::function<void()> onMasterFx;
     std::function<void (double)> onBpmChange;
     std::function<void (int)> onBarCountChange;
 
@@ -37,6 +38,7 @@ private:
     juce::TextButton recordButton { juce::String::fromUTF8 ("\xe2\x8f\xba") };
     juce::TextButton metronomeButton { juce::String::fromUTF8 ("\xf0\x9f\xa5\x81") };
     juce::TextButton settingsButton { juce::String::fromUTF8 ("\xe2\x9a\x99") };
+    juce::TextButton masterFxButton { "MFX" };
 
     juce::Label timeDisplay;
     juce::Label bpmField;

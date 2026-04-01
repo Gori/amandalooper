@@ -91,7 +91,10 @@ target_sources(AMLP PRIVATE
     source/ui/LevelMeter.h
     source/ui/LevelMeter.cpp
     source/ui/SettingsPanel.h
-    source/ui/SettingsPanel.cpp)
+    source/ui/SettingsPanel.cpp
+    source/ui/PluginBrowserPanel.h
+    source/ui/PluginBrowserPanel.cpp
+    source/ui/PluginEditorWindow.h)
 
 target_include_directories(AMLP PRIVATE source)
 

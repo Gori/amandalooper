@@ -111,16 +111,28 @@ void WaveformDisplay::paint (juce::Graphics& g)
         g.drawRoundedRectangle (bounds.reduced (1.0f), 4.0f, 2.0f);
     }
 
-    // Count-in overlay
-    if (countInBarsRemaining > 0)
+    // Count-in or threshold waiting overlay
+    if (countInBarsRemaining != 0)
     {
         g.setColour (AmlpLookAndFeel::getRecordingColour().withAlpha (0.3f));
         g.fillRoundedRectangle (bounds, 4.0f);
 
         g.setColour (juce::Colours::white);
-        g.setFont (juce::FontOptions (48.0f, juce::Font::bold));
-        g.drawText (juce::String (countInBarsRemaining),
-                    getLocalBounds(), juce::Justification::centred);
+
+        if (countInBarsRemaining < 0)
+        {
+            // Waiting for audio threshold
+            g.setFont (juce::FontOptions (18.0f));
+            g.drawText ("Waiting for audio...",
+                        getLocalBounds(), juce::Justification::centred);
+        }
+        else
+        {
+            // Beat countdown
+            g.setFont (juce::FontOptions (48.0f, juce::Font::bold));
+            g.drawText (juce::String (countInBarsRemaining),
+                        getLocalBounds(), juce::Justification::centred);
+        }
 
         g.setColour (AmlpLookAndFeel::getRecordingColour());
         g.drawRoundedRectangle (bounds.reduced (1.0f), 4.0f, 3.0f);

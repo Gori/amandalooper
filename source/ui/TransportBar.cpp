@@ -22,6 +22,10 @@ TransportBar::TransportBar()
     settingsButton.onClick = [this] { if (onSettings) onSettings(); };
     addAndMakeVisible (settingsButton);
 
+    masterFxButton.setColour (juce::TextButton::buttonColourId, AmlpLookAndFeel::getSurfaceColour());
+    masterFxButton.onClick = [this] { if (onMasterFx) onMasterFx(); };
+    addAndMakeVisible (masterFxButton);
+
     // Large time display
     timeDisplay.setText ("--:--:--", juce::dontSendNotification);
     timeDisplay.setFont (juce::FontOptions (28.0f, juce::Font::bold));
@@ -145,7 +149,9 @@ void TransportBar::resized()
     bounds.removeFromLeft (spacing);
     metronomeButton.setBounds (bounds.removeFromLeft (buttonW));
     bounds.removeFromLeft (spacing);
-    settingsButton.setBounds (bounds.removeFromLeft (40));
+    settingsButton.setBounds (bounds.removeFromLeft (35));
+    bounds.removeFromLeft (spacing);
+    masterFxButton.setBounds (bounds.removeFromLeft (40));
 
     bounds.removeFromLeft (spacing * 2);
 

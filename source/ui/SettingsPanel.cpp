@@ -12,6 +12,11 @@ SettingsPanel::SettingsPanel()
     autoMetronomeToggle.setColour (juce::ToggleButton::tickColourId, AmlpLookAndFeel::getPlayingColour());
     addAndMakeVisible (autoMetronomeToggle);
 
+    thresholdRecordingToggle.setToggleState (true, juce::dontSendNotification);
+    thresholdRecordingToggle.setColour (juce::ToggleButton::textColourId, AmlpLookAndFeel::getTextColour());
+    thresholdRecordingToggle.setColour (juce::ToggleButton::tickColourId, AmlpLookAndFeel::getPlayingColour());
+    addAndMakeVisible (thresholdRecordingToggle);
+
     defaultBarCountLabel.setText ("Default loop length:", juce::dontSendNotification);
     defaultBarCountLabel.setColour (juce::Label::textColourId, AmlpLookAndFeel::getTextColour());
     addAndMakeVisible (defaultBarCountLabel);
@@ -33,12 +38,17 @@ SettingsPanel::SettingsPanel()
     countInBarsSelector.setSelectedId (1, juce::dontSendNotification);
     addAndMakeVisible (countInBarsSelector);
 
-    setSize (300, 200);
+    setSize (300, 240);
 }
 
 bool SettingsPanel::getAutoMetronome() const
 {
     return autoMetronomeToggle.getToggleState();
+}
+
+bool SettingsPanel::getThresholdRecording() const
+{
+    return thresholdRecordingToggle.getToggleState();
 }
 
 int SettingsPanel::getDefaultBarCount() const
@@ -70,6 +80,8 @@ void SettingsPanel::resized()
     titleLabel.setBounds (bounds.removeFromTop (30));
     bounds.removeFromTop (8);
     autoMetronomeToggle.setBounds (bounds.removeFromTop (28));
+    bounds.removeFromTop (4);
+    thresholdRecordingToggle.setBounds (bounds.removeFromTop (28));
     bounds.removeFromTop (8);
 
     auto row = bounds.removeFromTop (28);

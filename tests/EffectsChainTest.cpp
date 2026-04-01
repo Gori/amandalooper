@@ -23,7 +23,7 @@ public:
         beginTest ("Initially no user effects");
         {
             EffectsChainManager manager (*edit);
-            expectEquals (manager.getNumEffects (*track), 0);
+            expectEquals (manager.getNumUserPlugins (track->pluginList), 0);
         }
 
         beginTest ("Add effects");
@@ -32,33 +32,32 @@ public:
 
             auto reverb = manager.addEffect (*track, EffectsChainManager::EffectType::reverb);
             expect (reverb != nullptr);
-            expectEquals (manager.getNumEffects (*track), 1);
+            expectEquals (manager.getNumUserPlugins (track->pluginList), 1);
 
             auto delay = manager.addEffect (*track, EffectsChainManager::EffectType::delay);
             expect (delay != nullptr);
-            expectEquals (manager.getNumEffects (*track), 2);
+            expectEquals (manager.getNumUserPlugins (track->pluginList), 2);
         }
 
         beginTest ("Bypass and unbypass");
         {
             EffectsChainManager manager (*edit);
-            // Effects from previous test should still be there
-            expect (! manager.isBypassed (*track, 0));
+            expect (! manager.isBypassed (track->pluginList, 0));
 
-            manager.setBypass (*track, 0, true);
-            expect (manager.isBypassed (*track, 0));
+            manager.setBypass (track->pluginList, 0, true);
+            expect (manager.isBypassed (track->pluginList, 0));
 
-            manager.setBypass (*track, 0, false);
-            expect (! manager.isBypassed (*track, 0));
+            manager.setBypass (track->pluginList, 0, false);
+            expect (! manager.isBypassed (track->pluginList, 0));
         }
 
         beginTest ("Remove effect");
         {
             EffectsChainManager manager (*edit);
-            int before = manager.getNumEffects (*track);
+            int before = manager.getNumUserPlugins (track->pluginList);
 
-            manager.removeEffect (*track, 0);
-            expectEquals (manager.getNumEffects (*track), before - 1);
+            manager.removePlugin (track->pluginList, 0);
+            expectEquals (manager.getNumUserPlugins (track->pluginList), before - 1);
         }
 
         beginTest ("Effect names");
@@ -79,7 +78,7 @@ public:
             manager.addEffect (*track2, EffectsChainManager::EffectType::phaser);
             manager.addEffect (*track2, EffectsChainManager::EffectType::pitchShift);
 
-            expect (manager.getNumEffects (*track2) >= 5);
+            expect (manager.getNumUserPlugins (track2->pluginList) >= 5);
         }
 
         editFile.deleteFile();

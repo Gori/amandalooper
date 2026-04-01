@@ -23,6 +23,7 @@ public:
     enum class State
     {
         idle,
+        waitingForThreshold,
         countingIn,
         recording,
         playing,
@@ -63,6 +64,9 @@ public:
     void setRecordingBarCount (int bars) { recordingBarCount = bars; }
     int getRecordingBarCount() const { return recordingBarCount; }
 
+    void setThresholdRecording (bool enabled) { thresholdRecording = enabled; }
+    bool getThresholdRecording() const { return thresholdRecording; }
+
     enum class RecordMode { replace, overdub, newLoop };
     void setRecordMode (RecordMode mode) { recordMode = mode; }
     RecordMode getRecordMode() const { return recordMode; }
@@ -84,6 +88,8 @@ private:
     int activeSlotIndex = -1;
     int recordingBarCount = 0; // 0 = match first loop
     RecordMode recordMode = RecordMode::newLoop;
+    bool thresholdRecording = true;
+    static constexpr float thresholdLevel = 0.01f; // ~-40dB
 
     // Count-in and auto-stop
     int countInTargetBar = 0;
