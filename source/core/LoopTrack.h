@@ -63,6 +63,16 @@ public:
     void setRecordingBarCount (int bars) { recordingBarCount = bars; }
     int getRecordingBarCount() const { return recordingBarCount; }
 
+    enum class RecordMode { replace, overdub, newLoop };
+    void setRecordMode (RecordMode mode) { recordMode = mode; }
+    RecordMode getRecordMode() const { return recordMode; }
+
+    /** Get names of all loops stored on this track. */
+    juce::StringArray getLoopNames (const juce::String& trackName) const;
+
+    /** Get the number of loops stored. */
+    int getNumLoops() const;
+
     /** Get count-in info for UI display. Returns beats remaining (0 = not counting in). */
     int getCountInBeatsRemaining() const;
 
@@ -73,6 +83,7 @@ private:
     State state = State::idle;
     int activeSlotIndex = -1;
     int recordingBarCount = 0; // 0 = match first loop
+    RecordMode recordMode = RecordMode::newLoop;
 
     // Count-in and auto-stop
     int countInTargetBar = 0;

@@ -43,7 +43,6 @@ void MainComponent::setupUI()
     for (int i = 0; i < loopManager->getTrackCount(); ++i)
     {
         auto* panel = new TrackPanel (i);
-        panel->setNumSlots (sceneManager->getNumScenes());
         addAndMakeVisible (panel);
         trackPanels.add (panel);
     }
@@ -109,17 +108,6 @@ void MainComponent::connectCallbacks()
                 track->stopRecording();
             else
                 track->startRecording (0);
-        }
-    };
-
-    transportBar.onOverdubToggle = [this]
-    {
-        if (auto* track = loopManager->getTrack (selectedTrack))
-        {
-            if (track->getState() == LoopTrack::State::overdubbing)
-                track->stopOverdub();
-            else if (track->getState() == LoopTrack::State::playing)
-                track->startOverdub();
         }
     };
 
@@ -198,10 +186,23 @@ void MainComponent::connectCallbacks()
             }
         };
 
-        panel->onSlotSelected = [this, i] (int slotIndex)
+        panel->onModeChanged = [this, i] (TrackPanel::RecordMode mode)
         {
             if (auto* track = loopManager->getTrack (i))
-                track->triggerSlot (slotIndex);
+            {
+                switch (mode)
+                {
+                    case TrackPanel::RecordMode::replace:  track->setRecordMode (LoopTrack::RecordMode::replace); break;
+                    case TrackPanel::RecordMode::overdub:   track->setRecordMode (LoopTrack::RecordMode::overdub); break;
+                    case TrackPanel::RecordMode::newLoop:   track->setRecordMode (LoopTrack::RecordMode::newLoop); break;
+                }
+            }
+        };
+
+        panel->onLoopSelected = [this, i] (int loopIndex)
+        {
+            if (auto* track = loopManager->getTrack (i))
+                track->triggerSlot (loopIndex);
         };
     }
 
@@ -237,8 +238,11 @@ void MainComponent::updateUI()
         panel->getWaveformDisplay().setCountIn (loopTrack->getCountInBeatsRemaining());
         panel->setPlaying (state == LoopTrack::State::playing);
         panel->setOverdubbing (state == LoopTrack::State::overdubbing);
-        panel->setActiveSlot (loopTrack->getActiveSlotIndex());
         panel->setArmed (i == selectedTrack);
+
+        // Update loop dropdown
+        auto loopNames = loopTrack->getLoopNames (panel->getTrackName());
+        panel->setLoopList (loopNames, loopTrack->getActiveSlotIndex());
 
         auto& teTrack = loopTrack->getTrack();
 
@@ -302,7 +306,6 @@ void MainComponent::updateUI()
     {
         bool anyPlaying = false;
         bool anyRecording = false;
-        bool anyOverdubbing = false;
         bool anyCountingIn = false;
 
         for (int i = 0; i < loopManager->getTrackCount(); ++i)
@@ -312,14 +315,12 @@ void MainComponent::updateUI()
                 auto s = lt->getState();
                 if (s == LoopTrack::State::playing)     anyPlaying = true;
                 if (s == LoopTrack::State::recording)   anyRecording = true;
-                if (s == LoopTrack::State::overdubbing)  anyOverdubbing = true;
                 if (s == LoopTrack::State::countingIn)   anyCountingIn = true;
             }
         }
 
         transportBar.setPlaying (anyPlaying || amlpEngine.getTransport().isPlaying());
         transportBar.setRecording (anyRecording);
-        transportBar.setOverdubbing (anyOverdubbing);
         transportBar.setCountingIn (anyCountingIn);
     }
 

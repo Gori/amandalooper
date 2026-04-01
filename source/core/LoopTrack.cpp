@@ -23,7 +23,20 @@ void LoopTrack::startRecording (int slotIndex)
     if (state == State::playing && activeSlotIndex != slotIndex)
         stopSlot();
 
-    activeSlotIndex = slotIndex;
+    // Determine which slot to record into based on mode
+    switch (recordMode)
+    {
+        case RecordMode::newLoop:
+            activeSlotIndex = getNumLoops(); // Next empty slot
+            break;
+        case RecordMode::replace:
+            activeSlotIndex = (slotIndex >= 0) ? slotIndex : 0;
+            break;
+        case RecordMode::overdub:
+            activeSlotIndex = (slotIndex >= 0) ? slotIndex : 0;
+            break;
+    }
+
     armTrackInput (true);
 
     if (manager.hasMasterBPM())
@@ -165,12 +178,26 @@ void LoopTrack::stopRecording()
 
             if (slotClip != nullptr)
             {
+                // Quantize clip length to exact bar boundaries so audio and playhead match
+                if (manager.hasMasterBPM())
+                {
+                    double barLength = (4.0 * 60.0) / manager.getMasterBPM();
+                    int clipBars = juce::jmax (1, (int) std::round (clipLengthSeconds / barLength));
+                    auto exactLength = tracktion::TimeDuration::fromSeconds (barLength * clipBars);
+
+                    slotClip->setPosition ({ { tracktion::TimePosition(), exactLength } });
+                }
+
                 slotClip->setLoopDefaults();
 
                 overdubStacks[activeSlotIndex].clear();
                 overdubStacks[activeSlotIndex].pushLayer (sourceFile);
 
                 auto& transport = track.edit.getTransport();
+
+                // Reset transport to 0 so playhead and audio start together
+                transport.setPosition (tracktion::TimePosition());
+
                 if (! transport.isPlaying())
                     transport.play (false);
 
@@ -311,6 +338,32 @@ te::WaveAudioClip* LoopTrack::getClipInSlot (int slotIndex)
 //==============================================================================
 // Helpers
 //==============================================================================
+
+juce::StringArray LoopTrack::getLoopNames (const juce::String& trackName) const
+{
+    juce::StringArray names;
+    auto slots = track.getClipSlotList().getClipSlots();
+
+    for (int i = 0; i < slots.size(); ++i)
+    {
+        if (auto* clip = dynamic_cast<te::WaveAudioClip*> (slots[i]->getClip()))
+            names.add (trackName + " - " + juce::String (i + 1));
+    }
+
+    return names;
+}
+
+int LoopTrack::getNumLoops() const
+{
+    int count = 0;
+    auto slots = track.getClipSlotList().getClipSlots();
+
+    for (auto* slot : slots)
+        if (slot->getClip() != nullptr)
+            ++count;
+
+    return count;
+}
 
 int LoopTrack::getCountInBeatsRemaining() const
 {

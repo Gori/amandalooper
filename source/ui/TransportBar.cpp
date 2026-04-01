@@ -14,10 +14,6 @@ TransportBar::TransportBar()
     recordButton.onClick = [this] { if (onRecord) onRecord(); };
     addAndMakeVisible (recordButton);
 
-    overdubButton.setColour (juce::TextButton::buttonColourId, AmlpLookAndFeel::getSurfaceColour());
-    overdubButton.onClick = [this] { if (onOverdubToggle) onOverdubToggle(); };
-    addAndMakeVisible (overdubButton);
-
     metronomeButton.setColour (juce::TextButton::buttonColourId, AmlpLookAndFeel::getSurfaceColour());
     metronomeButton.onClick = [this] { if (onMetronomeToggle) onMetronomeToggle(); };
     addAndMakeVisible (metronomeButton);
@@ -102,13 +98,6 @@ void TransportBar::setRecording (bool isRecording)
                     : AmlpLookAndFeel::getRecordingColour().darker (0.5f));
 }
 
-void TransportBar::setOverdubbing (bool isOverdubbing)
-{
-    overdubButton.setColour (juce::TextButton::buttonColourId,
-        isOverdubbing ? AmlpLookAndFeel::getOverdubbingColour()
-                      : AmlpLookAndFeel::getSurfaceColour());
-}
-
 void TransportBar::setMetronomeEnabled (bool enabled)
 {
     metronomeButton.setColour (juce::TextButton::buttonColourId,
@@ -153,8 +142,6 @@ void TransportBar::resized()
     stopButton.setBounds (bounds.removeFromLeft (buttonW));
     bounds.removeFromLeft (spacing);
     recordButton.setBounds (bounds.removeFromLeft (buttonW));
-    bounds.removeFromLeft (spacing);
-    overdubButton.setBounds (bounds.removeFromLeft (buttonW));
     bounds.removeFromLeft (spacing);
     metronomeButton.setBounds (bounds.removeFromLeft (buttonW));
     bounds.removeFromLeft (spacing);

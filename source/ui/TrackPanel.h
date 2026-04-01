@@ -5,36 +5,36 @@
 #include "WaveformDisplay.h"
 #include "LevelMeter.h"
 
-/**
-    A single horizontal track panel — hardware looper style.
-    Contains: track name, arm/mute/solo buttons, waveform display,
-    slot selector, and volume fader with level meter.
-*/
 class TrackPanel : public juce::Component
 {
 public:
+    enum class RecordMode { replace, overdub, newLoop };
+
     explicit TrackPanel (int trackIndex);
 
     // Callbacks
     std::function<void()> onArm;
     std::function<void()> onMute;
     std::function<void()> onSolo;
-    std::function<void (int)> onSlotSelected;
     std::function<void (float)> onVolumeChange;
+    std::function<void (RecordMode)> onModeChanged;
+    std::function<void (int)> onLoopSelected;
 
     void setTrackName (const juce::String& name);
+    juce::String getTrackName() const;
     void setArmed (bool armed);
     void setMuted (bool muted);
     void setSoloed (bool soloed);
-    void setNumSlots (int numSlots);
-    void setActiveSlot (int slotIndex);
     void setVolume (float normalizedVolume);
     void setRecording (bool recording);
     void setPlaying (bool playing);
     void setOverdubbing (bool overdubbing);
     void setInputLevel (float left, float right);
     void setOutputLevel (float left, float right);
+    void setMode (RecordMode mode);
+    void setLoopList (const juce::StringArray& names, int activeIndex);
 
+    RecordMode getMode() const { return currentMode; }
     WaveformDisplay& getWaveformDisplay() { return waveformDisplay; }
 
     void paint (juce::Graphics& g) override;
@@ -42,29 +42,32 @@ public:
 
 private:
     juce::Colour trackColour;
+    RecordMode currentMode = RecordMode::newLoop;
 
-    // Header controls
+    // Header
     juce::Label nameLabel;
+    juce::TextButton replaceButton { "Replace" };
+    juce::TextButton overdubButton { "Overdub" };
+    juce::TextButton newLoopButton { "New" };
     juce::TextButton armButton { "R" };
     juce::TextButton muteButton { "M" };
     juce::TextButton soloButton { "S" };
+    juce::Slider volumeSlider;
 
     // Waveform
     WaveformDisplay waveformDisplay;
 
-    // Slot selector buttons
-    juce::OwnedArray<juce::TextButton> slotButtons;
-    int activeSlotIndex = -1;
-
-    // Mixer
-    juce::Slider volumeSlider;
+    // Loop selector
+    juce::ComboBox loopDropdown;
 
     // Level meters
     LevelMeter inputMeter { LevelMeter::Orientation::vertical };
     LevelMeter outputMeter { LevelMeter::Orientation::vertical };
 
-    // State indicator
+    // State
     juce::Colour stateColour = AmlpLookAndFeel::getIdleColour();
+
+    void updateModeButtons();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TrackPanel)
 };
