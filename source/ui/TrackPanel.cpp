@@ -43,6 +43,10 @@ TrackPanel::TrackPanel (int trackIndex)
     fxButton.onClick = [this] { if (onFxClicked) onFxClicked(); };
     addAndMakeVisible (fxButton);
 
+    aiButton.setColour (juce::TextButton::buttonColourId, AmlpLookAndFeel::getSurfaceColour());
+    aiButton.onClick = [this] { if (onAIClicked) onAIClicked(); };
+    addAndMakeVisible (aiButton);
+
     // Waveform
     waveformDisplay.setTrackColour (trackColour);
     addAndMakeVisible (waveformDisplay);
@@ -101,6 +105,13 @@ void TrackPanel::setSoloed (bool soloed)
 {
     soloButton.setColour (juce::TextButton::buttonColourId,
         soloed ? AmlpLookAndFeel::getArmedColour() : AmlpLookAndFeel::getSurfaceColour());
+}
+
+void TrackPanel::setAIEnabled (bool enabled)
+{
+    aiButton.setEnabled (enabled);
+    aiButton.setColour (juce::TextButton::buttonColourId,
+        enabled ? juce::Colour(0xff2a9d8f) : AmlpLookAndFeel::getSurfaceColour());
 }
 
 void TrackPanel::setVolume (float normalizedVolume)
@@ -208,7 +219,8 @@ void TrackPanel::resized()
     armButton.setBounds (btnRow.removeFromLeft (28).reduced (1));
     muteButton.setBounds (btnRow.removeFromLeft (28).reduced (1));
     soloButton.setBounds (btnRow.removeFromLeft (28).reduced (1));
-    fxButton.setBounds (btnRow.removeFromLeft (28).reduced (1));
+    fxButton.setBounds (btnRow.removeFromLeft (30).reduced (1));
+    aiButton.setBounds (btnRow.removeFromLeft (28).reduced (1));
 
     // Volume
     volumeSlider.setBounds (header.removeFromTop (22));

@@ -15,6 +15,8 @@
 #include "ui/PluginBrowserPanel.h"
 #include "ui/PluginEditorWindow.h"
 #include "effects/EffectsChainManager.h"
+#include "core/AILoopClient.h"
+#include "ui/AILoopPanel.h"
 
 class MainComponent : public juce::Component,
                       private juce::Timer
@@ -45,6 +47,10 @@ private:
     std::unique_ptr<EffectsChainManager> effectsManager;
     juce::AudioDeviceManager::LevelMeter::Ptr inputLevelMeter;
     int pluginTargetTrack = -1; // -1 = master
+
+    std::unique_ptr<AILoopClient> aiLoopClient;
+    AILoopPanel aiLoopPanel;
+    int aiTargetTrack = 0;
 
     int selectedTrack = 0;
 

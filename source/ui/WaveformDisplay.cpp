@@ -25,6 +25,7 @@ void WaveformDisplay::clearSource()
     currentFile = juce::File();
     thumbnail.clear();
     playbackPosition = 0.0;
+    detectedKey.clear();
     repaint();
 }
 
@@ -48,6 +49,12 @@ void WaveformDisplay::setRecording (bool isRecording)
 void WaveformDisplay::setCountIn (int barsRemaining)
 {
     countInBarsRemaining = barsRemaining;
+}
+
+void WaveformDisplay::setDetectedKey (const juce::String& key)
+{
+    detectedKey = key;
+    repaint();
 }
 
 void WaveformDisplay::setBeatGrid (double bpm, int beatsPerBar, int numBars)
@@ -95,6 +102,21 @@ void WaveformDisplay::paint (juce::Graphics& g)
             auto cursorX = bounds.getX() + static_cast<float> (playbackPosition) * bounds.getWidth();
             g.setColour (juce::Colours::white.withAlpha (0.9f));
             g.drawLine (cursorX, bounds.getY(), cursorX, bounds.getBottom(), 2.0f);
+        }
+
+        // Draw detected key
+        if (! detectedKey.isEmpty())
+        {
+            juce::Font keyFont (14.0f, juce::Font::bold);
+            g.setFont (keyFont);
+            auto textWidth = keyFont.getStringWidthFloat (detectedKey);
+            juce::Rectangle<float> keyBounds (bounds.getX() + 4.0f, bounds.getY() + 4.0f, textWidth + 12.0f, 20.0f);
+            
+            g.setColour (juce::Colours::black.withAlpha (0.4f));
+            g.fillRoundedRectangle (keyBounds, 4.0f);
+            
+            g.setColour (juce::Colours::white.withAlpha (0.9f));
+            g.drawText (detectedKey, keyBounds, juce::Justification::centred, false);
         }
     }
     else

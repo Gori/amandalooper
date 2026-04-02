@@ -50,6 +50,22 @@ TransportBar::TransportBar()
     };
     addAndMakeVisible (bpmField);
 
+    // Key text field
+    keyField.setText ("Key", juce::dontSendNotification);
+    keyField.setFont (juce::FontOptions (16.0f, juce::Font::bold));
+    keyField.setColour (juce::Label::textColourId, AmlpLookAndFeel::getTextColour());
+    keyField.setColour (juce::Label::backgroundColourId, AmlpLookAndFeel::getSurfaceColour());
+    keyField.setColour (juce::Label::outlineColourId, AmlpLookAndFeel::getSurfaceColour().brighter (0.3f));
+    keyField.setJustificationType (juce::Justification::centred);
+    keyField.setEditable (true);
+    keyField.onTextChange = [this]
+    {
+        auto text = keyField.getText().trim();
+        if (onKeyChange)
+            onKeyChange (text);
+    };
+    addAndMakeVisible (keyField);
+
     // Bar count selector
     barCountSelector.addItem ("1 bar", 1);
     barCountSelector.addItem ("2 bars", 2);
@@ -71,6 +87,11 @@ void TransportBar::setBpm (double bpm)
 
     if (freeMode)
         setFreeMode (false);
+}
+
+void TransportBar::setKey (const juce::String& key)
+{
+    keyField.setText (key.isEmpty() ? "Key" : key, juce::dontSendNotification);
 }
 
 void TransportBar::setFreeMode (bool isFree)
@@ -162,6 +183,10 @@ void TransportBar::resized()
 
     // BPM field
     bpmField.setBounds (bounds.removeFromLeft (60));
+    bounds.removeFromLeft (spacing);
+
+    // Key field
+    keyField.setBounds (bounds.removeFromLeft (80));
     bounds.removeFromLeft (spacing);
 
     // Bar count selector

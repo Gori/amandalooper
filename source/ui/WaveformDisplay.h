@@ -18,6 +18,7 @@ public:
     void setTrackColour (juce::Colour colour);
     void setRecording (bool isRecording);
     void setCountIn (int barsRemaining);
+    void setDetectedKey (const juce::String& key);
 
     void setBeatGrid (double bpm, int beatsPerBar, int numBars);
 
@@ -34,6 +35,7 @@ private:
     juce::Colour trackColour = AmlpLookAndFeel::getPlayingColour();
     bool recording = false;
     int countInBarsRemaining = 0;
+    juce::String detectedKey;
 
     double gridBPM = 0.0;
     int gridBeatsPerBar = 4;

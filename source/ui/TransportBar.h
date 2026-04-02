@@ -17,8 +17,10 @@ public:
     std::function<void()> onMasterFx;
     std::function<void (double)> onBpmChange;
     std::function<void (int)> onBarCountChange;
+    std::function<void (const juce::String&)> onKeyChange;
 
     void setBpm (double bpm);
+    void setKey (const juce::String& key);
     void setFreeMode (bool isFree);
     void setPlaying (bool isPlaying);
     void setRecording (bool isRecording);
@@ -42,6 +44,7 @@ private:
 
     juce::Label timeDisplay;
     juce::Label bpmField;
+    juce::Label keyField;
     juce::ComboBox barCountSelector;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TransportBar)

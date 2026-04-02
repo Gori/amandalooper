@@ -65,6 +65,17 @@ double LoopManager::getMasterBPM() const
     return edit.tempoSequence.getBpmAt (tracktion::TimePosition());
 }
 
+void LoopManager::setMasterKey (const juce::String& key)
+{
+    masterKey = key;
+    masterKeySet = ! key.isEmpty();
+}
+
+juce::String LoopManager::getMasterKey() const
+{
+    return masterKey;
+}
+
 void LoopManager::detectAndSetTempoFromFirstLoop (double loopLengthSeconds)
 {
     if (masterBPMSet)

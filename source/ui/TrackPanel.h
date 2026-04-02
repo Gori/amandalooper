@@ -1,6 +1,7 @@
 #pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>
+#include <functional>
 #include "AmlpLookAndFeel.h"
 #include "WaveformDisplay.h"
 #include "LevelMeter.h"
@@ -18,8 +19,9 @@ public:
     std::function<void()> onSolo;
     std::function<void (float)> onVolumeChange;
     std::function<void (RecordMode)> onModeChanged;
-    std::function<void (int)> onLoopSelected;
+    std::function<void(int)> onLoopSelected;
     std::function<void()> onFxClicked;
+    std::function<void()> onAIClicked;
 
     void setTrackName (const juce::String& name);
     juce::String getTrackName() const;
@@ -34,6 +36,7 @@ public:
     void setOutputLevel (float left, float right);
     void setMode (RecordMode mode);
     void setLoopList (const juce::StringArray& names, int activeIndex);
+    void setAIEnabled (bool enabled);
 
     RecordMode getMode() const { return currentMode; }
     WaveformDisplay& getWaveformDisplay() { return waveformDisplay; }
@@ -54,6 +57,7 @@ private:
     juce::TextButton muteButton { "M" };
     juce::TextButton soloButton { "S" };
     juce::TextButton fxButton { "FX" };
+    juce::TextButton aiButton { "AI" };
     juce::Slider volumeSlider;
 
     // Waveform

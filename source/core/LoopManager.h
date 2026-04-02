@@ -24,10 +24,14 @@ public:
     LoopTrack* addTrack();
     void removeTrack (int index);
 
-    // ---- Master Tempo ----
+    // ---- Master Tempo & Key ----
     void setMasterBPM (double bpm);
     double getMasterBPM() const;
     bool hasMasterBPM() const { return masterBPMSet; }
+
+    void setMasterKey (const juce::String& key);
+    juce::String getMasterKey() const;
+    bool hasMasterKey() const { return masterKeySet; }
 
     /**
         Call after the first loop is recorded to auto-detect BPM.
@@ -53,6 +57,8 @@ private:
     te::Edit& edit;
     std::vector<std::unique_ptr<LoopTrack>> loopTracks;
     bool masterBPMSet = false;
+    juce::String masterKey = "";
+    bool masterKeySet = false;
     int detectedBarCount = 0;
     QuantizeManager quantizeManager;
 

@@ -17,6 +17,9 @@ add_subdirectory(JUCE)
 # Add Tracktion Engine modules (uses juce_add_modules from JUCE above)
 add_subdirectory(tracktion_engine/modules)
 
+# Add libkeyfinder
+add_subdirectory(libs/libkeyfinder)
+
 # IDE source groups
 set_property(GLOBAL PROPERTY USE_FOLDERS YES)
 option(JUCE_ENABLE_MODULE_SOURCE_GROUPS "Enable Module Source Groups" ON)
@@ -52,6 +55,8 @@ target_sources(AMLP PRIVATE
     source/core/OverdubStack.cpp
     source/core/TempoDetector.h
     source/core/TempoDetector.cpp
+    source/core/KeyDetector.h
+    source/core/KeyDetector.cpp
     source/core/LoopLengthController.h
     source/core/LoopLengthController.cpp
     source/core/QuantizeManager.h
@@ -94,9 +99,16 @@ target_sources(AMLP PRIVATE
     source/ui/SettingsPanel.cpp
     source/ui/PluginBrowserPanel.h
     source/ui/PluginBrowserPanel.cpp
-    source/ui/PluginEditorWindow.h)
+    source/ui/PluginEditorWindow.h
+    source/core/AILoopClient.h
+    source/core/AILoopClient.cpp
+    source/ui/AILoopPanel.h
+    source/ui/AILoopPanel.cpp)
 
-target_include_directories(AMLP PRIVATE source)
+file(COPY scripts/ai_loop_server.py scripts/setup_ai_env.py
+     DESTINATION ${CMAKE_BINARY_DIR}/AMLP_artefacts/AMLP.app/Contents/Resources/)
+
+target_include_directories(AMLP PRIVATE source libs/libkeyfinder/src)
 
 target_compile_definitions(AMLP PRIVATE
     JUCE_WEB_BROWSER=0
@@ -120,7 +132,8 @@ target_link_libraries(AMLP PRIVATE
     juce::juce_gui_extra
     juce::juce_recommended_config_flags
     juce::juce_recommended_lto_flags
-    juce::juce_recommended_warning_flags)
+    juce::juce_recommended_warning_flags
+    keyfinder)
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
     target_compile_options(AMLP PRIVATE "-fno-aligned-allocation")

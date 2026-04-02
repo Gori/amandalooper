@@ -1,4 +1,6 @@
 #include "MainComponent.h"
+#include "core/AudioFileImporter.h"
+#include "core/KeyDetector.h"
 
 namespace te = tracktion::engine;
 
@@ -28,6 +30,7 @@ void MainComponent::setupEngine()
     sceneManager = std::make_unique<SceneManager> (edit);
     metronome = std::make_unique<Metronome> (edit);
     effectsManager = std::make_unique<EffectsChainManager> (edit);
+    aiLoopClient = std::make_unique<AILoopClient>();
 
     // No hardcoded BPM — starts in FREE mode
     // BPM will be set by the first recording
@@ -86,6 +89,9 @@ void MainComponent::setupUI()
         pluginBrowser.setPlugins (effectsManager->getAvailablePlugins());
     };
     addChildComponent (pluginBrowser);
+
+    aiLoopPanel.setVisible (false);
+    addChildComponent (aiLoopPanel);
 
     inputLevelMeter = amlpEngine.getEngine().getDeviceManager().deviceManager.getInputLevelGetter();
 }
@@ -191,6 +197,11 @@ void MainComponent::connectCallbacks()
 
     transportBar.onSettings = [this] { showSettingsPanel(); };
 
+    transportBar.onKeyChange = [this] (const juce::String& key)
+    {
+        loopManager->setMasterKey (key);
+    };
+
     transportBar.onMasterFx = [this]
     {
         pluginTargetTrack = -1; // master
@@ -253,7 +264,49 @@ void MainComponent::connectCallbacks()
             pluginBrowser.setBounds (centre.x - 200, centre.y - 250, 400, 500);
             pluginBrowser.toFront (true);
         };
+
+        panel->onAIClicked = [this, i]
+        {
+            aiTargetTrack = i;
+
+            aiLoopPanel.prepareForGeneration (static_cast<int>(loopManager->getMasterBPM()), loopManager->getDetectedBarCount(), loopManager->getMasterKey());
+            aiLoopPanel.setVisible (true);
+            auto centre = getLocalBounds().getCentre();
+            aiLoopPanel.setBounds (centre.x - 200, centre.y - 200, 400, 420);
+            aiLoopPanel.toFront (true);
+            aiLoopClient->ensureServerRunning();
+        };
     }
+
+    aiLoopPanel.onClose = [this] { aiLoopPanel.setVisible(false); };
+    aiLoopPanel.onGenerate = [this] (const AILoopParams& params) {
+        aiLoopClient->startGeneration(params);
+    };
+
+    aiLoopClient->onComplete = [this] (const juce::File& file, bool success)
+    {
+        if (success && aiTargetTrack >= 0 && aiTargetTrack < loopManager->getTrackCount())
+        {
+            if (auto* track = loopManager->getTrack (aiTargetTrack))
+            {
+                AudioFileImporter importer(amlpEngine.getEdit());
+                int nextSlot = track->getActiveSlotIndex() + 1;
+                bool foundEmpty = false;
+                for (int s = 0; s < 8; ++s) {
+                    if (track->getClipInSlot(s) == nullptr) {
+                        nextSlot = s;
+                        foundEmpty = true;
+                        break;
+                    }
+                }
+                if (!foundEmpty) nextSlot = (track->getActiveSlotIndex() + 1) % 8;
+
+                importer.importFileWithTimeStretch (file, track->getTrack(), nextSlot, loopManager->getMasterBPM());
+                track->triggerSlot(nextSlot);
+                aiLoopPanel.setVisible(false);
+            }
+        }
+    };
 
     sceneBar.onLaunchScene = [this] (int sceneIndex)
     {
@@ -272,6 +325,16 @@ void MainComponent::connectCallbacks()
 void MainComponent::updateUI()
 {
     bool bpmIsSet = loopManager->hasMasterBPM();
+    
+    bool hasAudio = false;
+    for (int t = 0; t < loopManager->getTrackCount(); ++t) {
+        if (auto* lt = loopManager->getTrack(t)) {
+            if (lt->getClipInSlot(0) != nullptr || lt->getState() == LoopTrack::State::recording) {
+                hasAudio = true;
+                break;
+            }
+        }
+    }
 
     for (int i = 0; i < trackPanels.size() && i < loopManager->getTrackCount(); ++i)
     {
@@ -282,6 +345,7 @@ void MainComponent::updateUI()
 
         auto state = loopTrack->getState();
         panel->setRecording (state == LoopTrack::State::recording);
+        panel->setAIEnabled(hasAudio);
 
         // Count-in or threshold waiting overlay on waveform
         if (state == LoopTrack::State::waitingForThreshold)
@@ -305,7 +369,19 @@ void MainComponent::updateUI()
             auto& waveform = panel->getWaveformDisplay();
 
             if (waveform.getCurrentFile() != file)
+            {
                 waveform.setSource (file);
+                
+                // Detect key and auto-set master key if missing
+                auto detectedKey = KeyDetector::detectKey (file);
+                waveform.setDetectedKey (detectedKey);
+
+                if (! loopManager->hasMasterKey() && ! detectedKey.isEmpty())
+                {
+                    loopManager->setMasterKey (detectedKey);
+                    transportBar.setKey (detectedKey);
+                }
+            }
 
             // Beat grid — use this clip's actual bar count
             if (bpmIsSet)
@@ -443,6 +519,12 @@ void MainComponent::updateUI()
     else
     {
         deviceStatusLabel.setText ("No audio device - click Audio Settings", juce::dontSendNotification);
+    }
+
+    if (aiLoopClient)
+    {
+        aiLoopPanel.setServerState (aiLoopClient->getServerState(), aiLoopClient->getSetupProgress());
+        aiLoopPanel.setGenerationState (aiLoopClient->getGenerationState(), aiLoopClient->getGenerationProgress(), aiLoopClient->getErrorMessage());
     }
 }
 

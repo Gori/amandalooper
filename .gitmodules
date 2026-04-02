@@ -4,3 +4,6 @@
 [submodule "tracktion_engine"]
 	path = tracktion_engine
 	url = https://github.com/Tracktion/tracktion_engine.git
+[submodule "libs/libkeyfinder"]
+	path = libs/libkeyfinder
+	url = https://github.com/mixxxdj/libkeyfinder.git
