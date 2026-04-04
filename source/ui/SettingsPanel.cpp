@@ -7,12 +7,20 @@ SettingsPanel::SettingsPanel()
     titleLabel.setColour (juce::Label::textColourId, AmlpLookAndFeel::getTextColour());
     addAndMakeVisible (titleLabel);
 
+    closeButton.setColour (juce::TextButton::buttonColourId, AmlpLookAndFeel::getSurfaceColour());
+    closeButton.onClick = [this]
+    {
+        if (onClose)
+            onClose();
+    };
+    addAndMakeVisible (closeButton);
+
     autoMetronomeToggle.setToggleState (true, juce::dontSendNotification);
     autoMetronomeToggle.setColour (juce::ToggleButton::textColourId, AmlpLookAndFeel::getTextColour());
     autoMetronomeToggle.setColour (juce::ToggleButton::tickColourId, AmlpLookAndFeel::getPlayingColour());
     addAndMakeVisible (autoMetronomeToggle);
 
-    thresholdRecordingToggle.setToggleState (true, juce::dontSendNotification);
+    thresholdRecordingToggle.setToggleState (false, juce::dontSendNotification);
     thresholdRecordingToggle.setColour (juce::ToggleButton::textColourId, AmlpLookAndFeel::getTextColour());
     thresholdRecordingToggle.setColour (juce::ToggleButton::tickColourId, AmlpLookAndFeel::getPlayingColour());
     addAndMakeVisible (thresholdRecordingToggle);
@@ -77,7 +85,9 @@ void SettingsPanel::resized()
 {
     auto bounds = getLocalBounds().reduced (16);
 
-    titleLabel.setBounds (bounds.removeFromTop (30));
+    auto header = bounds.removeFromTop (30);
+    closeButton.setBounds (header.removeFromRight (72));
+    titleLabel.setBounds (header);
     bounds.removeFromTop (8);
     autoMetronomeToggle.setBounds (bounds.removeFromTop (28));
     bounds.removeFromTop (4);

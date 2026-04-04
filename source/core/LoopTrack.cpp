@@ -1,8 +1,12 @@
 #include "LoopTrack.h"
 #include "LoopManager.h"
+#include <cmath>
 
 LoopTrack::LoopTrack (te::AudioTrack& t, int index, LoopManager& lm)
-    : track (t), manager (lm), trackIndex (index)
+    : track (t),
+      manager (lm),
+      trackIndex (index),
+      inputLevelMeter (t.edit.engine.getDeviceManager().deviceManager.getInputLevelGetter())
 {
 }
 
@@ -20,28 +24,35 @@ void LoopTrack::startRecording (int slotIndex)
     if (state != State::idle && state != State::playing)
         return;
 
-    if (state == State::playing && activeSlotIndex != slotIndex)
-        stopSlot();
-
-    // Determine which slot to record into based on mode
+    // Determine target slot — don't switch activeSlotIndex yet,
+    // current clip keeps playing during count-in
     switch (recordMode)
     {
         case RecordMode::newLoop:
-            activeSlotIndex = getNumLoops(); // Next empty slot
+            pendingRecordSlot = getNumLoops();
             break;
         case RecordMode::replace:
-            activeSlotIndex = (slotIndex >= 0) ? slotIndex : 0;
+            pendingRecordSlot = (slotIndex >= 0) ? slotIndex : 0;
             break;
         case RecordMode::overdub:
-            activeSlotIndex = (slotIndex >= 0) ? slotIndex : 0;
+            pendingRecordSlot = (slotIndex >= 0) ? slotIndex : 0;
             break;
     }
 
     armTrackInput (true);
 
+    {
+        auto logFile = juce::File::getSpecialLocation (juce::File::userHomeDirectory)
+            .getChildFile (".amlp").getChildFile ("amlp_debug.log");
+        auto tempDir = track.edit.getTempDirectory (false);
+        logFile.appendText ("startRecording: tempDir exists=" + juce::String (tempDir.isDirectory() ? "true" : "false")
+            + " path=" + tempDir.getFullPathName() + "\n");
+    }
+
     if (manager.hasMasterBPM())
     {
         // BPM is set — count in to next bar boundary, then record
+        // Current clip keeps playing during count-in
         state = State::countingIn;
 
         auto& transport = track.edit.getTransport();
@@ -64,6 +75,15 @@ void LoopTrack::startRecording (int slotIndex)
     else
     {
         // Free mode — first loop sets BPM
+        // Stop current clip before recording
+        if (activeSlotIndex >= 0)
+        {
+            if (auto* clip = getClipInSlot (activeSlotIndex))
+                if (auto handle = clip->getLaunchHandle())
+                    handle->stop ({});
+        }
+        activeSlotIndex = pendingRecordSlot;
+
         if (thresholdRecording)
         {
             // Wait for audio input to exceed threshold before recording
@@ -73,15 +93,29 @@ void LoopTrack::startRecording (int slotIndex)
         else
         {
             // Record immediately
-            state = State::recording;
             autoStopTimeSeconds = 0.0;
 
             auto& transport = track.edit.getTransport();
             if (! transport.isPlaying())
+            {
+                // Start transport first, then record on next message loop
+                // iteration so the audio graph is fully initialized
                 transport.play (false);
-
-            transport.record (false);
-            recordingStartTime = transport.getPosition().inSeconds();
+                state = State::countingIn; // brief transitional state
+                juce::Timer::callAfterDelay (50, [this]
+                {
+                    state = State::recording;
+                    auto& t = track.edit.getTransport();
+                    t.record (false);
+                    recordingStartTime = t.getPosition().inSeconds();
+                });
+            }
+            else
+            {
+                state = State::recording;
+                transport.record (false);
+                recordingStartTime = transport.getPosition().inSeconds();
+            }
         }
     }
 }
@@ -90,32 +124,29 @@ void LoopTrack::timerCallback()
 {
     if (state == State::waitingForThreshold)
     {
-        // Check input level — use the InputDevice's level measurer
-        for (auto instance : track.edit.getAllInputDevices())
+        // Check the live device-manager input meter. Keeping a persistent
+        // reference ensures JUCE continues producing level data.
+        if (inputLevelMeter != nullptr)
         {
-            if (instance->getInputDevice().getDeviceType() == te::InputDevice::waveDevice
-                && te::isOnTargetTrack (*instance, track, 0))
+            const auto level = (float) inputLevelMeter->getCurrentLevel();
+
+            if (level >= thresholdLevel)
             {
-                auto cache = instance->getInputDevice().levelMeasurer.getLevelCache();
-                float level = te::dbToGain (cache.first);
+                // Audio detected — start recording
+                stopTimer();
+                state = State::recording;
+                autoStopTimeSeconds = 0.0;
 
-                if (level >= thresholdLevel)
-                {
-                    // Audio detected — start recording
-                    stopTimer();
-                    state = State::recording;
-                    autoStopTimeSeconds = 0.0;
+                auto& transport = track.edit.getTransport();
+                if (! transport.isPlaying())
+                    transport.play (false);
 
-                    auto& transport = track.edit.getTransport();
-                    if (! transport.isPlaying())
-                        transport.play (false);
-
-                    transport.record (false);
-                    recordingStartTime = transport.getPosition().inSeconds();
-                    return;
-                }
+                transport.record (false);
+                recordingStartTime = transport.getPosition().inSeconds();
+                return;
             }
         }
+
         return;
     }
 
@@ -133,6 +164,16 @@ void LoopTrack::timerCallback()
         if (currentBar >= countInTargetBar)
         {
             stopTimer();
+
+            // Stop the current clip — recording is starting on this track
+            if (activeSlotIndex >= 0)
+            {
+                if (auto* clip = getClipInSlot (activeSlotIndex))
+                    if (auto handle = clip->getLaunchHandle())
+                        handle->stop ({});
+            }
+            activeSlotIndex = pendingRecordSlot;
+
             state = State::recording;
 
             transport.record (false);
@@ -175,10 +216,42 @@ void LoopTrack::stopRecording()
 
     stopTimer();
 
-    track.edit.getTransport().stopRecording();
+    auto& transport = track.edit.getTransport();
+    auto stopPos = transport.getPosition().inSeconds();
+
+    transport.stopRecording();
     armTrackInput (false);
 
+    // Allow TE to finalize the recording clip before checking
+    track.edit.dispatchPendingUpdatesSynchronously();
+
+    auto logFile = juce::File::getSpecialLocation (juce::File::userHomeDirectory)
+        .getChildFile (".amlp").getChildFile ("amlp_debug.log");
+
+    logFile.appendText ("stopRecording: startPos=" + juce::String (recordingStartTime, 3)
+        + " stopPos=" + juce::String (stopPos, 3)
+        + " duration=" + juce::String (stopPos - recordingStartTime, 3) + "\n");
+
     auto clips = track.getClips();
+    logFile.appendText ("stopRecording: clips on track=" + juce::String (clips.size()) + "\n");
+
+    // Also check all tracks in the edit for clips
+    for (auto* t : te::getAudioTracks (track.edit))
+    {
+        auto tc = t->getClips();
+        if (tc.size() > 0)
+            logFile.appendText ("  track '" + t->getName() + "' has " + juce::String (tc.size()) + " clips\n");
+    }
+
+    // Check temp dir for recent recordings
+    auto tempDir = track.edit.getTempDirectory (false);
+    if (tempDir.isDirectory())
+    {
+        auto files = tempDir.findChildFiles (juce::File::findFiles, false, "*.wav");
+        logFile.appendText ("  temp dir: " + juce::String (files.size()) + " wav files\n");
+        for (auto& f : files)
+            logFile.appendText ("    " + f.getFileName() + " (" + juce::String (f.getSize()) + " bytes)\n");
+    }
 
     te::WaveAudioClip* recordedClip = nullptr;
     for (int i = clips.size() - 1; i >= 0; --i)
@@ -197,7 +270,8 @@ void LoopTrack::stopRecording()
         auto clipLengthSeconds = clipPos.getLength().inSeconds();
 
         // Auto-detect BPM from first recording
-        if (! manager.hasMasterBPM() && clipLengthSeconds > 0.0)
+        bool isFirstRecording = ! manager.hasMasterBPM();
+        if (isFirstRecording && clipLengthSeconds > 0.0)
             manager.detectAndSetTempoFromFirstLoop (clipLengthSeconds);
 
         auto& slotList = track.getClipSlotList();
@@ -236,14 +310,30 @@ void LoopTrack::stopRecording()
 
                 auto& transport = track.edit.getTransport();
 
-                // Reset transport to 0 so playhead and audio start together
-                transport.setPosition (tracktion::TimePosition());
-
                 if (! transport.isPlaying())
                     transport.play (false);
 
                 if (auto handle = slotClip->getLaunchHandle())
-                    handle->play ({});
+                {
+                    if (auto referenceHandle = manager.getPlayingLaunchHandle (this))
+                    {
+                        if (auto* playbackContext = transport.getCurrentPlaybackContext())
+                        {
+                            if (auto syncPoint = playbackContext->getSyncPoint())
+                                handle->playSynced (*referenceHandle, syncPoint->monotonicBeat);
+                            else
+                                handle->play ({});
+                        }
+                        else
+                        {
+                            handle->play ({});
+                        }
+                    }
+                    else
+                    {
+                        handle->play ({});
+                    }
+                }
 
                 state = State::playing;
                 return;
@@ -329,7 +419,25 @@ void LoopTrack::triggerSlot (int slotIndex)
             if (! transport.isPlaying())
                 transport.play (false);
 
-            handle->play ({});
+            if (auto referenceHandle = manager.getPlayingLaunchHandle (this))
+            {
+                if (auto* playbackContext = transport.getCurrentPlaybackContext())
+                {
+                    if (auto syncPoint = playbackContext->getSyncPoint())
+                        handle->playSynced (*referenceHandle, syncPoint->monotonicBeat);
+                    else
+                        handle->play ({});
+                }
+                else
+                {
+                    handle->play ({});
+                }
+            }
+            else
+            {
+                handle->play ({});
+            }
+
             activeSlotIndex = slotIndex;
             state = State::playing;
         }
@@ -348,7 +456,6 @@ void LoopTrack::stopSlot()
     }
 
     state = State::idle;
-    activeSlotIndex = -1;
 }
 
 //==============================================================================
@@ -376,6 +483,24 @@ te::WaveAudioClip* LoopTrack::getClipInSlot (int slotIndex)
     return nullptr;
 }
 
+std::optional<double> LoopTrack::getPlaybackProgress()
+{
+    if (! manager.hasMasterBPM())
+        return std::nullopt;
+
+    auto* clip = getClipInSlot (activeSlotIndex);
+    if (clip == nullptr)
+        return std::nullopt;
+
+    auto clipSeconds = clip->getPosition().getLength().inSeconds();
+    if (clipSeconds <= 0.0)
+        return std::nullopt;
+
+    // Derive position from the ONE master clock — the transport
+    auto transportSeconds = track.edit.getTransport().getPosition().inSeconds();
+    return std::fmod (transportSeconds, clipSeconds) / clipSeconds;
+}
+
 //==============================================================================
 // Helpers
 //==============================================================================
@@ -387,7 +512,7 @@ juce::StringArray LoopTrack::getLoopNames (const juce::String& trackName) const
 
     for (int i = 0; i < slots.size(); ++i)
     {
-        if (auto* clip = dynamic_cast<te::WaveAudioClip*> (slots[i]->getClip()))
+        if (dynamic_cast<te::WaveAudioClip*> (slots[i]->getClip()) != nullptr)
             names.add (trackName + " - " + juce::String (i + 1));
     }
 
@@ -424,6 +549,9 @@ int LoopTrack::getCountInBeatsRemaining() const
 
 void LoopTrack::armTrackInput (bool arm)
 {
+    auto logFile = juce::File::getSpecialLocation (juce::File::userHomeDirectory)
+        .getChildFile (".amlp").getChildFile ("amlp_debug.log");
+
     bool found = false;
 
     for (auto instance : track.edit.getAllInputDevices())
@@ -432,21 +560,27 @@ void LoopTrack::armTrackInput (bool arm)
         {
             instance->setRecordingEnabled (track.itemID, arm);
             found = true;
+            logFile.appendText ("armTrackInput: PRIMARY path, arm=" + juce::String (arm ? "true" : "false") + "\n");
         }
     }
 
     if (! found && arm)
     {
+        logFile.appendText ("armTrackInput: FALLBACK path (no existing input)\n");
         for (auto instance : track.edit.getAllInputDevices())
         {
             if (instance->getInputDevice().getDeviceType() == te::InputDevice::waveDevice)
             {
-                instance->setTarget (track.itemID, true, &track.edit.getUndoManager(), 0);
+                [[maybe_unused]] const auto targetAssignment = instance->setTarget (track.itemID, true, &track.edit.getUndoManager(), 0);
                 instance->setRecordingEnabled (track.itemID, true);
+                logFile.appendText ("  setTarget done, recEnabled=" + juce::String (instance->isRecordingEnabled (track.itemID) ? "true" : "false") + "\n");
                 break;
             }
         }
     }
+
+    if (! found && ! arm)
+        logFile.appendText ("armTrackInput: disarm, no input found\n");
 }
 
 te::ClipSlot* LoopTrack::getSlot (int slotIndex)

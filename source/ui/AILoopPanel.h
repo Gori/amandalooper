@@ -19,7 +19,9 @@ public:
     void setServerState (AILoopClient::ServerState state, float setupProgress);
     void setGenerationState (AILoopClient::GenState state, float progress, const juce::String& errorMsg);
 
-    void prepareForGeneration (int masterBpm, int detectedBars, const juce::String& masterKey);
+    void prepareForGeneration (double masterBpm, int detectedBars, const juce::String& masterKey);
+    void prepareForStyleTransfer (double masterBpm, int detectedBars, const juce::String& masterKey,
+                                  const juce::String& sourceAudioPath);
 
 private:
     juce::Label titleLabel { {}, "AI Loop Generator" };
@@ -53,6 +55,11 @@ private:
 
     AILoopClient::ServerState currentServerState = AILoopClient::ServerState::notStarted;
     AILoopClient::GenState currentGenState = AILoopClient::GenState::idle;
+
+    bool styleTransferMode = false;
+    juce::String currentSourceAudioPath;
+    juce::Label variationLabel { {}, "Variation:" };
+    juce::Slider variationSlider;
 
     void updateUIState();
 

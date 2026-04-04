@@ -1,5 +1,7 @@
 #pragma once
 
+#include <optional>
+
 #include <juce_core/juce_core.h>
 #include <tracktion_engine/tracktion_engine.h>
 #include "OverdubStack.h"
@@ -60,6 +62,7 @@ public:
 
     OverdubStack* getActiveOverdubStack();
     te::WaveAudioClip* getClipInSlot (int slotIndex);
+    std::optional<double> getPlaybackProgress();
 
     void setRecordingBarCount (int bars) { recordingBarCount = bars; }
     int getRecordingBarCount() const { return recordingBarCount; }
@@ -85,11 +88,13 @@ private:
     LoopManager& manager;
     int trackIndex;
     State state = State::idle;
-    int activeSlotIndex = -1;
+    int activeSlotIndex = 0;
+    int pendingRecordSlot = -1;
     int recordingBarCount = 0; // 0 = match first loop
     RecordMode recordMode = RecordMode::newLoop;
-    bool thresholdRecording = true;
+    bool thresholdRecording = false;
     static constexpr float thresholdLevel = 0.01f; // ~-40dB
+    juce::AudioDeviceManager::LevelMeter::Ptr inputLevelMeter;
 
     // Count-in and auto-stop
     int countInTargetBar = 0;

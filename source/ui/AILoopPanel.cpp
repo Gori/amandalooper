@@ -47,19 +47,30 @@ AILoopPanel::AILoopPanel()
         {
             AILoopParams p;
             p.prompt = promptEditor.getText();
-            p.bpm = bpmValueLabel.getText().getIntValue();
+            p.bpm = bpmValueLabel.getText().getDoubleValue();
             p.bars = barsValueLabel.getText().getIntValue();
             p.key = keyValueLabel.getText();
             p.steps = (int)stepsSlider.getValue();
             p.cfgScale = (float)cfgSlider.getValue();
             p.seed = seedEditor.getText().getIntValue();
-            p.secondsTotal = (p.bars * 4.0f * 60.0f) / p.bpm;
-            p.secondsTotal = (p.bars * 4.0f * 60.0f) / p.bpm;
+            p.secondsTotal = (p.bars * 4.0 * 60.0) / p.bpm;
+
+            if (styleTransferMode)
+            {
+                p.sourceAudioPath   = currentSourceAudioPath;
+                p.variationStrength = (float) variationSlider.getValue();
+            }
 
             onGenerate (p);
         }
     };
     addAndMakeVisible (generateButton);
+
+    variationSlider.setSliderStyle (juce::Slider::LinearHorizontal);
+    variationSlider.setRange (0.0, 1.0, 0.01);
+    variationSlider.setValue (0.7);
+    addChildComponent (variationLabel);
+    addChildComponent (variationSlider);
 
     statusLabel.setJustificationType (juce::Justification::centred);
     addAndMakeVisible (statusLabel);
@@ -69,11 +80,39 @@ AILoopPanel::AILoopPanel()
 
 AILoopPanel::~AILoopPanel() = default;
 
-void AILoopPanel::prepareForGeneration (int masterBpm, int detectedBars, const juce::String& masterKey)
+void AILoopPanel::prepareForGeneration (double masterBpm, int detectedBars, const juce::String& masterKey)
 {
-    bpmValueLabel.setText (juce::String (masterBpm), juce::dontSendNotification);
+    styleTransferMode = false;
+    currentSourceAudioPath = {};
+
+    titleLabel.setText ("AI Loop Generator", juce::dontSendNotification);
+    generateButton.setButtonText ("Generate");
+    variationLabel.setVisible (false);
+    variationSlider.setVisible (false);
+
+    bpmValueLabel.setText (juce::String (masterBpm, 2), juce::dontSendNotification);
     barsValueLabel.setText (juce::String (detectedBars > 0 ? detectedBars : 4), juce::dontSendNotification);
     keyValueLabel.setText (masterKey, juce::dontSendNotification);
+
+    resized();
+}
+
+void AILoopPanel::prepareForStyleTransfer (double masterBpm, int detectedBars, const juce::String& masterKey,
+                                           const juce::String& sourceAudioPath)
+{
+    styleTransferMode = true;
+    currentSourceAudioPath = sourceAudioPath;
+
+    titleLabel.setText ("AI Vary", juce::dontSendNotification);
+    generateButton.setButtonText ("Vary");
+    variationLabel.setVisible (true);
+    variationSlider.setVisible (true);
+
+    bpmValueLabel.setText (juce::String (masterBpm, 2), juce::dontSendNotification);
+    barsValueLabel.setText (juce::String (detectedBars > 0 ? detectedBars : 4), juce::dontSendNotification);
+    keyValueLabel.setText (masterKey, juce::dontSendNotification);
+
+    resized();
 }
 
 
@@ -114,7 +153,7 @@ void AILoopPanel::setGenerationState (AILoopClient::GenState state, float progre
     
     if (state == AILoopClient::GenState::running)
     {
-        statusLabel.setText ("Generating Loop...", juce::dontSendNotification);
+        statusLabel.setText (styleTransferMode ? "Generating Variation..." : "Generating Loop...", juce::dontSendNotification);
         progressValue = progress;
     }
     else if (state == AILoopClient::GenState::done)
@@ -145,6 +184,7 @@ void AILoopPanel::updateUIState()
     stepsSlider.setEnabled (!isGenerating);
     cfgSlider.setEnabled (!isGenerating);
     seedEditor.setEnabled (!isGenerating);
+    variationSlider.setEnabled (!isGenerating);
 }
 
 void AILoopPanel::paint (juce::Graphics& g)
@@ -193,9 +233,17 @@ void AILoopPanel::resized()
     auto row3 = b.removeFromTop (24);
     seedLabel.setBounds (row3.removeFromLeft (50));
     seedEditor.setBounds (row3.removeFromLeft (100));
-    
+
+    if (styleTransferMode)
+    {
+        b.removeFromTop (10);
+        auto varRow = b.removeFromTop (24);
+        variationLabel.setBounds (varRow.removeFromLeft (70));
+        variationSlider.setBounds (varRow.removeFromLeft (150));
+    }
+
     b.removeFromTop (10);
-    
+
     statusLabel.setBounds (b.removeFromTop (24));
     progressBar.setBounds (b.removeFromTop (20));
     

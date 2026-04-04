@@ -110,6 +110,31 @@ void LoopManager::ensureScenes (int numScenes)
     edit.getSceneList().ensureNumberOfScenes (numScenes);
 }
 
+std::shared_ptr<te::LaunchHandle> LoopManager::getPlayingLaunchHandle (LoopTrack* excludedTrack)
+{
+    for (auto& lt : loopTracks)
+    {
+        if (lt.get() == excludedTrack)
+            continue;
+
+        const auto slotIndex = lt->getActiveSlotIndex();
+        if (slotIndex < 0)
+            continue;
+
+        if (auto* clip = lt->getClipInSlot (slotIndex))
+        {
+            if (auto handle = clip->getLaunchHandle();
+                handle != nullptr
+                && handle->getPlayingStatus() == te::LaunchHandle::PlayState::playing)
+            {
+                return handle;
+            }
+        }
+    }
+
+    return {};
+}
+
 //==============================================================================
 // Private
 //==============================================================================

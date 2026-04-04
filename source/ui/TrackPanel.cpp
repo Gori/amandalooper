@@ -47,6 +47,11 @@ TrackPanel::TrackPanel (int trackIndex)
     aiButton.onClick = [this] { if (onAIClicked) onAIClicked(); };
     addAndMakeVisible (aiButton);
 
+    varyButton.setColour (juce::TextButton::buttonColourId, AmlpLookAndFeel::getSurfaceColour());
+    varyButton.onClick = [this] { if (onVaryClicked) onVaryClicked(); };
+    varyButton.setEnabled (false);
+    addAndMakeVisible (varyButton);
+
     // Waveform
     waveformDisplay.setTrackColour (trackColour);
     addAndMakeVisible (waveformDisplay);
@@ -112,6 +117,13 @@ void TrackPanel::setAIEnabled (bool enabled)
     aiButton.setEnabled (enabled);
     aiButton.setColour (juce::TextButton::buttonColourId,
         enabled ? juce::Colour(0xff2a9d8f) : AmlpLookAndFeel::getSurfaceColour());
+}
+
+void TrackPanel::setVaryEnabled (bool enabled)
+{
+    varyButton.setEnabled (enabled);
+    varyButton.setColour (juce::TextButton::buttonColourId,
+        enabled ? juce::Colour(0xff6a4c93) : AmlpLookAndFeel::getSurfaceColour());
 }
 
 void TrackPanel::setVolume (float normalizedVolume)
@@ -204,7 +216,7 @@ void TrackPanel::resized()
     bounds.removeFromLeft (4);
 
     // Header column
-    auto header = bounds.removeFromLeft (150);
+    auto header = bounds.removeFromLeft (185);
     nameLabel.setBounds (header.removeFromTop (20));
 
     // Mode buttons row
@@ -221,6 +233,7 @@ void TrackPanel::resized()
     soloButton.setBounds (btnRow.removeFromLeft (28).reduced (1));
     fxButton.setBounds (btnRow.removeFromLeft (30).reduced (1));
     aiButton.setBounds (btnRow.removeFromLeft (28).reduced (1));
+    varyButton.setBounds (btnRow.removeFromLeft (34).reduced (1));
 
     // Volume
     volumeSlider.setBounds (header.removeFromTop (22));

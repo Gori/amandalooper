@@ -22,6 +22,7 @@ public:
     std::function<void(int)> onLoopSelected;
     std::function<void()> onFxClicked;
     std::function<void()> onAIClicked;
+    std::function<void()> onVaryClicked;
 
     void setTrackName (const juce::String& name);
     juce::String getTrackName() const;
@@ -37,6 +38,7 @@ public:
     void setMode (RecordMode mode);
     void setLoopList (const juce::StringArray& names, int activeIndex);
     void setAIEnabled (bool enabled);
+    void setVaryEnabled (bool enabled);
 
     RecordMode getMode() const { return currentMode; }
     WaveformDisplay& getWaveformDisplay() { return waveformDisplay; }
@@ -58,6 +60,7 @@ private:
     juce::TextButton soloButton { "S" };
     juce::TextButton fxButton { "FX" };
     juce::TextButton aiButton { "AI" };
+    juce::TextButton varyButton { "Vary" };
     juce::Slider volumeSlider;
 
     // Waveform

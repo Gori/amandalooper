@@ -5,13 +5,17 @@
 struct AILoopParams
 {
     juce::String prompt;
-    int bpm = 120;
+    double bpm = 120.0;
     int bars = 4;
     juce::String key = "C major";
     int steps = 100;
     float cfgScale = 6.0f;
     int seed = -1;
-    float secondsTotal = 8.0f;
+    double secondsTotal = 8.0;
+
+    // Style transfer — empty sourceAudioPath means normal generation
+    juce::String sourceAudioPath;
+    float variationStrength = 0.7f; // maps to init_noise_level (0=copy, 1=fully random)
 };
 
 class AILoopClient : private juce::Thread

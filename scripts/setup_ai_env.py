@@ -34,8 +34,8 @@ def main():
     print("PROGRESS:0.15:Installing PyTorch & Stable Audio Tools...", flush=True)
     try:
         subprocess.run([str(pip_exe), "install", "--upgrade", "pip", "setuptools", "wheel"], check=True, stdout=subprocess.DEVNULL)
-        subprocess.run([str(pip_exe), "install", "stable-audio-tools", "k-diffusion", "encodec", "local-attention", "auraloss", "einops-exts", "ema-pytorch", "laion-clap", "prefigure", "pytorch-lightning", "PyWavelets", "sentencepiece", "torchmetrics", "vector-quantize-pytorch", "wandb", "webdataset", "jsonschema", "alias-free-torch", "scikit-image", "--no-deps"], check=True)
-        subprocess.run([str(pip_exe), "install", "torch", "torchaudio", "einops", "safetensors", "transformers", "descript-audio-codec", "julius", "huggingface_hub", "flask", "werkzeug", "tqdm", "v-diffusion-pytorch", "numpy", "scipy"], check=True)
+        subprocess.run([str(pip_exe), "install", "git+https://github.com/RoyalCities/RC-stable-audio-tools.git", "k-diffusion", "encodec", "local-attention", "auraloss", "einops-exts", "ema-pytorch", "laion-clap", "prefigure", "pytorch-lightning", "PyWavelets", "sentencepiece", "torchmetrics", "vector-quantize-pytorch", "wandb", "webdataset", "jsonschema", "alias-free-torch", "scikit-image", "--no-deps"], check=True)
+        subprocess.run([str(pip_exe), "install", "torch", "torchaudio", "torchcodec", "einops", "safetensors", "transformers", "descript-audio-codec", "julius", "huggingface_hub", "flask", "werkzeug", "tqdm", "v-diffusion-pytorch", "numpy", "scipy", "soundfile"], check=True)
     except subprocess.CalledProcessError as e:
         print(f"ERROR:Failed to install deps: {e}", file=sys.stderr)
         sys.exit(1)

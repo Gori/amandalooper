@@ -7,6 +7,8 @@ from pathlib import Path
 from flask import Flask, request, jsonify
 import torch
 import torchaudio
+import torchaudio.functional
+import soundfile as sf
 import tqdm
 from stable_audio_tools.inference.generation import generate_diffusion_cond
 from stable_audio_tools.models.utils import load_ckpt_state_dict
@@ -90,14 +92,28 @@ def generate_worker(job_id, params):
         seconds_total = params.get("seconds_total", 8.0)
         sample_size = int(seconds_total * sample_rate)
         
+        bpm = params.get("bpm", 120)
+        bars = params.get("bars", 4)
         musical_key = params.get("key", "")
+        
+        # Build a musically-aware prompt if not already complex
+        extra_info = []
+        if bpm and f"{bpm}bpm" not in prompt.lower() and "bpm" not in prompt.lower():
+            extra_info.append(f"{bpm}bpm")
         if musical_key and musical_key not in prompt:
-            prompt = f"{prompt}, key of {musical_key}"
+            extra_info.append(f"key of {musical_key}")
+        if bars and "bar" not in prompt.lower():
+            extra_info.append(f"{bars} bars")
+            
+        if extra_info:
+            prompt = f"{prompt}, {', '.join(extra_info)}"
 
         conditioning = [{
             "prompt": prompt,
             "seconds_start": 0,
-            "seconds_total": seconds_total
+            "seconds_total": seconds_total,
+            "bpm": bpm,
+            "bars": bars
         }]
         
         output = generate_diffusion_cond(
@@ -128,10 +144,7 @@ def generate_worker(job_id, params):
         
         # Clamp output to prevent clipping
         output = output.clamp(-1.0, 1.0)
-        import soundfile as sf
-        # soundfile expects (frames, channels) shape
-        audio_np = output.numpy().T
-        sf.write(str(out_file), audio_np, sample_rate)
+        sf.write(str(out_file), output.numpy().T, sample_rate)
         
         jobs[job_id]["output_path"] = str(out_file)
         jobs[job_id]["state"] = "done"
@@ -142,6 +155,109 @@ def generate_worker(job_id, params):
         traceback.print_exc()
         jobs[job_id]["state"] = "error"
         jobs[job_id]["error"] = str(e)
+
+def style_transfer_worker(job_id, params):
+    _thread_local.job_id = job_id
+    try:
+        steps             = params.get("steps", 100)
+        cfg_scale         = params.get("cfgScale", 6.0)
+        prompt            = params.get("prompt", "")
+        seed              = params.get("seed", -1)
+        seconds_total     = params.get("seconds_total", 8.0)
+        sample_size       = int(seconds_total * sample_rate)
+        variation_strength = float(params.get("variation_strength", 0.7))
+        source_path       = params.get("source_audio_path", "")
+
+        bpm         = params.get("bpm", 120)
+        bars        = params.get("bars", 4)
+        musical_key = params.get("key", "")
+
+        # Load source audio via soundfile (avoids torchaudio backend issues)
+        audio_np, source_sr = sf.read(source_path, always_2d=True)
+        # soundfile gives (frames, channels); convert to (channels, frames)
+        source_audio = torch.from_numpy(audio_np.T).float()
+        if source_sr != sample_rate:
+            source_audio = torchaudio.functional.resample(source_audio, source_sr, sample_rate)
+
+        # Trim or pad to exact sample_size
+        if source_audio.shape[1] > sample_size:
+            source_audio = source_audio[:, :sample_size]
+        elif source_audio.shape[1] < sample_size:
+            padding = torch.zeros((source_audio.shape[0], sample_size - source_audio.shape[1]))
+            source_audio = torch.cat([source_audio, padding], dim=1)
+
+        # Match model dtype and device
+        model_dtype = next(model.parameters()).dtype
+        source_audio = source_audio.to(device=device, dtype=model_dtype)
+
+        # Build conditioning prompt (same enrichment as generate_worker)
+        extra_info = []
+        if bpm and f"{bpm}bpm" not in prompt.lower() and "bpm" not in prompt.lower():
+            extra_info.append(f"{bpm}bpm")
+        if musical_key and musical_key not in prompt:
+            extra_info.append(f"key of {musical_key}")
+        if bars and "bar" not in prompt.lower():
+            extra_info.append(f"{bars} bars")
+        if extra_info:
+            prompt = f"{prompt}, {', '.join(extra_info)}"
+
+        conditioning = [{
+            "prompt": prompt,
+            "seconds_start": 0,
+            "seconds_total": seconds_total,
+            "bpm": bpm,
+            "bars": bars
+        }]
+
+        output = generate_diffusion_cond(
+            model,
+            steps=steps,
+            cfg_scale=cfg_scale,
+            conditioning=conditioning,
+            sample_size=sample_size,
+            seed=seed,
+            device=device,
+            batch_size=1,
+            init_audio=(sample_rate, source_audio),
+            init_noise_level=variation_strength
+        )
+
+        from einops import rearrange
+        output = rearrange(output, "b d n -> d (b n)").detach().cpu().float()
+
+        if output.shape[1] > sample_size:
+            output = output[:, :sample_size]
+        elif output.shape[1] < sample_size:
+            padding = torch.zeros((output.shape[0], sample_size - output.shape[1]))
+            output = torch.cat([output, padding], dim=1)
+
+        outs_dir = Path.home() / ".amlp" / "generated"
+        outs_dir.mkdir(parents=True, exist_ok=True)
+        out_file = outs_dir / f"ai_vary_{job_id}.wav"
+
+        output = output.clamp(-1.0, 1.0)
+        sf.write(str(out_file), output.numpy().T, sample_rate)
+
+        jobs[job_id]["output_path"] = str(out_file)
+        jobs[job_id]["state"] = "done"
+        jobs[job_id]["progress"] = 1.0
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        jobs[job_id]["state"] = "error"
+        jobs[job_id]["error"] = str(e)
+
+
+@app.route("/style_transfer", methods=["POST"])
+def style_transfer():
+    params = request.json
+    job_id = str(uuid.uuid4())
+    jobs[job_id] = {"state": "running", "progress": 0.0}
+    thread = threading.Thread(target=style_transfer_worker, args=(job_id, params))
+    thread.start()
+    return jsonify({"job_id": job_id})
+
 
 @app.route("/generate", methods=["POST"])
 def generate():

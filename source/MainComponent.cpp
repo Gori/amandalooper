@@ -67,6 +67,7 @@ void MainComponent::setupUI()
     addAndMakeVisible (masterMeter);
 
     settingsPanel.setVisible (false);
+    settingsPanel.onClose = [this] { settingsPanel.setVisible (false); };
     addChildComponent (settingsPanel);
 
     pluginBrowser.setVisible (false);
@@ -109,13 +110,13 @@ void MainComponent::connectCallbacks()
         }
         else
         {
-            // Resume/Play — start transport and trigger all tracks with clips
+            // Play — start transport, all tracks with clips play their selected loop
             transport.play (false);
 
             for (int i = 0; i < loopManager->getTrackCount(); ++i)
                 if (auto* t = loopManager->getTrack (i))
-                    if (t->getClipInSlot (0) != nullptr && t->getState() == LoopTrack::State::idle)
-                        t->triggerSlot (0);
+                    if (t->getClipInSlot (t->getActiveSlotIndex()) != nullptr)
+                        t->triggerSlot (t->getActiveSlotIndex());
         }
     };
 
@@ -268,11 +269,36 @@ void MainComponent::connectCallbacks()
         panel->onAIClicked = [this, i]
         {
             aiTargetTrack = i;
+            aiStyleTransferActive = false;
 
-            aiLoopPanel.prepareForGeneration (static_cast<int>(loopManager->getMasterBPM()), loopManager->getDetectedBarCount(), loopManager->getMasterKey());
+            aiLoopPanel.prepareForGeneration (loopManager->getMasterBPM(),
+                                             loopManager->getDetectedBarCount(),
+                                             loopManager->getMasterKey());
             aiLoopPanel.setVisible (true);
             auto centre = getLocalBounds().getCentre();
             aiLoopPanel.setBounds (centre.x - 200, centre.y - 200, 400, 420);
+            aiLoopPanel.toFront (true);
+            aiLoopClient->ensureServerRunning();
+        };
+
+        panel->onVaryClicked = [this, i]
+        {
+            auto* loopTrack = loopManager->getTrack (i);
+            if (loopTrack == nullptr) return;
+
+            auto* clip = loopTrack->getClipInSlot (loopTrack->getActiveSlotIndex());
+            if (clip == nullptr) return;
+
+            aiTargetTrack = i;
+            aiStyleTransferActive = true;
+
+            aiLoopPanel.prepareForStyleTransfer (loopManager->getMasterBPM(),
+                                                 loopManager->getDetectedBarCount(),
+                                                 loopManager->getMasterKey(),
+                                                 clip->getOriginalFile().getFullPathName());
+            aiLoopPanel.setVisible (true);
+            auto centre = getLocalBounds().getCentre();
+            aiLoopPanel.setBounds (centre.x - 200, centre.y - 230, 400, 460);
             aiLoopPanel.toFront (true);
             aiLoopClient->ensureServerRunning();
         };
@@ -289,21 +315,37 @@ void MainComponent::connectCallbacks()
         {
             if (auto* track = loopManager->getTrack (aiTargetTrack))
             {
-                AudioFileImporter importer(amlpEngine.getEdit());
-                int nextSlot = track->getActiveSlotIndex() + 1;
-                bool foundEmpty = false;
-                for (int s = 0; s < 8; ++s) {
-                    if (track->getClipInSlot(s) == nullptr) {
-                        nextSlot = s;
-                        foundEmpty = true;
-                        break;
-                    }
-                }
-                if (!foundEmpty) nextSlot = (track->getActiveSlotIndex() + 1) % 8;
+                AudioFileImporter importer (amlpEngine.getEdit());
 
-                importer.importFileWithTimeStretch (file, track->getTrack(), nextSlot, loopManager->getMasterBPM());
-                track->triggerSlot(nextSlot);
-                aiLoopPanel.setVisible(false);
+                int targetSlot;
+
+                if (aiStyleTransferActive)
+                {
+                    // Variation replaces the clip in the active slot
+                    targetSlot = track->getActiveSlotIndex();
+                }
+                else
+                {
+                    // Generation goes into the next empty slot
+                    targetSlot = track->getActiveSlotIndex() + 1;
+                    bool foundEmpty = false;
+                    for (int s = 0; s < 8; ++s)
+                    {
+                        if (track->getClipInSlot (s) == nullptr)
+                        {
+                            targetSlot = s;
+                            foundEmpty = true;
+                            break;
+                        }
+                    }
+                    if (! foundEmpty)
+                        targetSlot = (track->getActiveSlotIndex() + 1) % 8;
+                }
+
+                importer.importFileWithTimeStretch (file, track->getTrack(), targetSlot, loopManager->getMasterBPM());
+                track->triggerSlot (targetSlot);
+                aiLoopPanel.setVisible (false);
+                aiStyleTransferActive = false;
             }
         }
     };
@@ -346,6 +388,10 @@ void MainComponent::updateUI()
         auto state = loopTrack->getState();
         panel->setRecording (state == LoopTrack::State::recording);
         panel->setAIEnabled(hasAudio);
+
+        bool thisTrackHasAudio = loopManager->hasMasterBPM()
+            && (loopTrack->getClipInSlot (loopTrack->getActiveSlotIndex()) != nullptr);
+        panel->setVaryEnabled (thisTrackHasAudio);
 
         // Count-in or threshold waiting overlay on waveform
         if (state == LoopTrack::State::waitingForThreshold)
@@ -392,22 +438,13 @@ void MainComponent::updateUI()
                 waveform.setBeatGrid (loopManager->getMasterBPM(), 4, clipBars);
             }
 
-            // Playback cursor — each track uses its own bar count but BPM-derived length for sync
-            if ((state == LoopTrack::State::playing || state == LoopTrack::State::overdubbing)
-                && amlpEngine.getTransport().isPlaying() && bpmIsSet)
+            // Playback cursor — derived from the ONE master clock (transport)
+            waveform.setPlaybackPosition (0.0);
+
+            if (amlpEngine.getTransport().isPlaying() && bpmIsSet)
             {
-                double barLength = (4.0 * 60.0) / loopManager->getMasterBPM();
-
-                // Calculate this clip's bar count from its actual length
-                auto clipSeconds = clip->getPosition().getLength().inSeconds();
-                int clipBars = juce::jmax (1, (int) std::round (clipSeconds / barLength));
-                double loopLength = barLength * clipBars;
-
-                if (loopLength > 0.0)
-                {
-                    auto pos = amlpEngine.getTransport().getPosition().inSeconds();
-                    waveform.setPlaybackPosition (std::fmod (pos, loopLength) / loopLength);
-                }
+                if (auto playbackProgress = loopTrack->getPlaybackProgress())
+                    waveform.setPlaybackPosition (*playbackProgress);
             }
         }
 

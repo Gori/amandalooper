@@ -8,6 +8,8 @@ class SettingsPanel : public juce::Component
 public:
     SettingsPanel();
 
+    std::function<void()> onClose;
+
     bool getAutoMetronome() const;
     bool getThresholdRecording() const;
     int getDefaultBarCount() const;   // 0 = match first loop
@@ -24,6 +26,7 @@ private:
     juce::Label defaultBarCountLabel;
     juce::Label countInBarsLabel;
     juce::Label titleLabel;
+    juce::TextButton closeButton { "Close" };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SettingsPanel)
 };

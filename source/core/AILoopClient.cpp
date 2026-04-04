@@ -93,6 +93,13 @@ void AILoopClient::startGeneration (const AILoopParams& params)
     jsonObj->setProperty ("seed", params.seed);
     jsonObj->setProperty ("seconds_total", params.secondsTotal);
 
+    const bool isStyleTransfer = params.sourceAudioPath.isNotEmpty();
+    if (isStyleTransfer)
+    {
+        jsonObj->setProperty ("source_audio_path", params.sourceAudioPath);
+        jsonObj->setProperty ("variation_strength", params.variationStrength);
+    }
+
     juce::MemoryOutputStream m;
 
     juce::JSON::writeToStream (m, juce::var (jsonObj.get()));
@@ -102,7 +109,8 @@ void AILoopClient::startGeneration (const AILoopParams& params)
     genProgress = 0.0f;
     errorMessage = "";
 
-    auto response = sendPostRequest ("/generate", jsonStr);
+    const juce::String endpoint = isStyleTransfer ? "/style_transfer" : "/generate";
+    auto response = sendPostRequest (endpoint, jsonStr);
     auto vResponse = juce::JSON::parse (response);
     if (vResponse.isObject())
     {

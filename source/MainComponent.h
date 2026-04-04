@@ -51,6 +51,7 @@ private:
     std::unique_ptr<AILoopClient> aiLoopClient;
     AILoopPanel aiLoopPanel;
     int aiTargetTrack = 0;
+    bool aiStyleTransferActive = false;
 
     int selectedTrack = 0;
 

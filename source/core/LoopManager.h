@@ -51,6 +51,8 @@ public:
     QuantizeManager& getQuantizeManager() { return quantizeManager; }
     const QuantizeManager& getQuantizeManager() const { return quantizeManager; }
 
+    std::shared_ptr<te::LaunchHandle> getPlayingLaunchHandle (LoopTrack* excludedTrack = nullptr);
+
     te::Edit& getEdit() { return edit; }
 
 private:
